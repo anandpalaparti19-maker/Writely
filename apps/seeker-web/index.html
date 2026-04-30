@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Writely | Hire Great Writers, Get Great Work</title>
+    <link rel="stylesheet" href="../../shared/utils/style.css?v=1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics-compat.js"></script>
+    <script src="../../shared/utils/logic.js" defer></script>
+</head>
+<body>
+
+    <nav>
+        <div class="container" style="display:flex; justify-content:space-between; align-items:center; width:100%">
+            <a href="#" class="logo">
+                <div class="logo-mark">
+                    <svg width="20" height="20" viewBox="0 0 42 42" fill="none">
+                        <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                        <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                        <circle cx="30" cy="12" r="3" fill="#9FE1CB"/>
+                    </svg>
+                </div>
+                Writely
+            </a>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="assignment_platform_architecture_site.html">Architecture</a>
+                <a href="login.html" class="btn btn-secondary" style="padding: 10px 20px">Sign In</a>
+                <a href="register.html" class="btn btn-primary" style="padding: 10px 20px">Get Started</a>
+            </div>
+        </div>
+    </nav>
+
+    <main>
+        <section class="hero container">
+            <div class="hero-content animate-fade-in">
+                <span class="section-tag">Empowering Academic Excellence</span>
+                <h1>Hire great writers. <br><span class="gradient-text">Get great work.</span></h1>
+                <p>The premium marketplace connecting students with elite academic writers. Secure payments, plagiarism-free work, and real-time collaboration.</p>
+                <div class="hero-actions">
+                    <a href="register.html" class="btn btn-primary">
+                        Post an Assignment
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    </a>
+                    <a href="register.html" class="btn btn-secondary">Become a Writer</a>
+                </div>
+            </div>
+            
+            <!-- Floating Image / Mockup area -->
+            <div style="margin-top: 80px; position: relative;" class="animate-fade-in" style="animation-delay: 0.2s">
+                <div style="background: white; padding: 20px; border-radius: 32px; box-shadow: var(--shadow-lg); border: 1px solid var(--border); overflow: hidden; max-width: 900px; margin: 0 auto;">
+                    <div style="height: 400px; background: var(--bg-secondary); border-radius: 20px; display: flex; align-items: center; justify-content: center; color: var(--text-tertiary); font-weight: 500;">
+                        <img src="https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&q=80&w=1200" alt="Writing desk" style="width: 100%; height: 100%; object-fit: cover; opacity: 0.8">
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="features" class="features">
+            <div class="container">
+                <div style="text-align: center; max-width: 600px; margin: 0 auto 60px;">
+                    <span class="section-tag">Why Writely?</span>
+                    <h2 style="font-size: 36px; font-weight: 800; letter-spacing: -0.02em;">Built for quality & security</h2>
+                </div>
+                
+                <div class="grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                        </div>
+                        <h3>Escrow Protection</h3>
+                        <p>Funds are held securely by our Stripe-powered escrow system and only released when you're 100% satisfied.</p>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                        </div>
+                        <h3>Real-time Tracking</h3>
+                        <p>Chat directly with your writer and track progress updates via our integrated Kafka-powered event bus.</p>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                        </div>
+                        <h3>Turnitin Verified</h3>
+                        <p>Every ₹0 commission is automatically checked via the Turnitin API to ensure 100% original work.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="container" style="padding: 120px 0; text-align: center;">
+            <div style="background: var(--ink-purple); border-radius: 40px; padding: 80px 40px; color: white; box-shadow: var(--shadow-lg);">
+                <h2 style="font-size: 48px; font-weight: 800; margin-bottom: 24px; letter-spacing: -0.03em;">Ready to get started?</h2>
+                <p style="font-size: 20px; opacity: 0.9; margin-bottom: 40px; max-width: 600px; margin-left: auto; margin-right: auto;">Join thousands of students and professional writers on the world's most secure academic marketplace.</p>
+                <div style="display: flex; justify-content: center; gap: 16px;">
+                    <a href="register.html" class="btn" style="background: white; color: var(--ink-purple);">Post My First Task</a>
+                    <a href="register.html" class="btn" style="background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.3);">Browse Jobs</a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer style="padding: 60px 0; border-top: 1px solid var(--border);">
+        <div class="container" style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="logo">
+                <div class="logo-mark" style="width: 28px; height: 28px;">
+                    <svg width="16" height="16" viewBox="0 0 42 42" fill="none">
+                        <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                        <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                        <circle cx="30" cy="12" r="3" fill="#9FE1CB"/>
+                    </svg>
+                </div>
+                Writely
+            </div>
+            <p style="color: var(--text-tertiary); font-size: 14px;">© 2026 Writely Platform. All rights reserved.</p>
+            <div style="display: flex; gap: 24px;">
+                <a href="assignment_platform_architecture_site.html" style="color: var(--text-secondary); text-decoration: none; font-size: 14px;">System Architecture</a>
+                <a href="#" style="color: var(--text-secondary); text-decoration: none; font-size: 14px;">Terms</a>
+                <a href="#" style="color: var(--text-secondary); text-decoration: none; font-size: 14px;">Privacy</a>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

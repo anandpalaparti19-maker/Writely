@@ -1,0 +1,356 @@
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font-sans,sans-serif);color:var(--color-text-primary);background:transparent;}
+.brand-wrap{display:flex;flex-direction:column;gap:0;}
+.section{padding:32px 28px;border-bottom:0.5px solid var(--color-border-tertiary);}
+.section:last-child{border-bottom:none;}
+.sec-label{font-size:10px;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--color-text-tertiary);margin-bottom:20px;}
+.logo-hero{display:flex;align-items:center;justify-content:center;padding:48px 0 36px;}
+.logo-hero-inner{display:flex;align-items:center;gap:16px;}
+.mark-lg{width:72px;height:72px;border-radius:20px;background:#7F77DD;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.wordmark-lg{display:flex;flex-direction:column;gap:2px;}
+.wordmark-name{font-size:36px;font-weight:500;letter-spacing:-.04em;color:#7F77DD;line-height:1;}
+.wordmark-name span{color:#1D9E75;}
+.wordmark-tagline{font-size:12px;color:var(--color-text-secondary);letter-spacing:.02em;font-weight:400;}
+
+.variants-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}
+.variant-card{border:0.5px solid var(--color-border-tertiary);border-radius:12px;overflow:hidden;}
+.variant-bg{padding:28px 20px;display:flex;align-items:center;justify-content:center;}
+.variant-bg.white{background:#ffffff;}
+.variant-bg.dark{background:#1a1a1a;}
+.variant-bg.purple{background:#7F77DD;}
+.variant-label{font-size:10px;color:var(--color-text-tertiary);padding:8px 14px;border-top:0.5px solid var(--color-border-tertiary);}
+
+.logo-inline{display:flex;align-items:center;gap:8px;}
+.mark-sm{border-radius:8px;background:#7F77DD;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.name-sm{font-size:15px;font-weight:500;letter-spacing:-.02em;color:#7F77DD;line-height:1;}
+.name-sm span{color:#1D9E75;}
+.name-sm-white{color:#fff;}
+.name-sm-white span{color:#9FE1CB;}
+
+.name-dark{color:#CECBF6;}
+.name-dark span{color:#5DCAA5;}
+
+.palette-row{display:flex;gap:8px;flex-wrap:wrap;}
+.swatch{border-radius:8px;overflow:hidden;border:0.5px solid var(--color-border-tertiary);}
+.swatch-color{height:44px;width:80px;}
+.swatch-info{padding:6px 8px;background:var(--color-background-primary);}
+.swatch-name{font-size:10px;font-weight:500;color:var(--color-text-primary);}
+.swatch-hex{font-size:10px;color:var(--color-text-tertiary);font-family:var(--font-mono);}
+
+.type-row{display:flex;flex-direction:column;gap:12px;}
+.type-item{display:flex;align-items:baseline;gap:16px;}
+.type-spec{font-size:10px;color:var(--color-text-tertiary);width:80px;flex-shrink:0;font-family:var(--font-mono);}
+
+.usage-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.usage-card{border:0.5px solid var(--color-border-tertiary);border-radius:12px;overflow:hidden;}
+.usage-preview{padding:20px;display:flex;align-items:center;gap:10px;background:var(--color-background-secondary);}
+.usage-desc{padding:10px 14px;font-size:11px;color:var(--color-text-secondary);border-top:0.5px solid var(--color-border-tertiary);}
+.usage-title{font-size:11px;font-weight:500;color:var(--color-text-primary);margin-bottom:2px;}
+
+.nav-mock{display:flex;align-items:center;justify-content:space-between;padding:0 16px;height:40px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:8px;width:100%;}
+.nav-mock-links{display:flex;gap:12px;}
+.nav-mock-dot{width:36px;height:5px;border-radius:3px;background:var(--color-border-secondary);}
+
+.app-icon-row{display:flex;gap:10px;align-items:center;}
+.app-icon{border-radius:16px;background:#7F77DD;display:flex;align-items:center;justify-content:center;}
+.app-icon-sm{border-radius:10px;background:#7F77DD;display:flex;align-items:center;justify-content:center;}
+
+.divider{height:0.5px;background:var(--color-border-tertiary);margin:0;}
+</style>
+
+<div class="brand-wrap">
+
+  <div class="section" style="padding-bottom:0;border-bottom:none;">
+    <div class="sec-label">Primary logo</div>
+    <div class="logo-hero">
+      <div class="logo-hero-inner">
+        <div class="mark-lg">
+          <svg width="42" height="42" viewBox="0 0 42 42" fill="none">
+            <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+            <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+            <circle cx="30" cy="12" r="3" fill="#9FE1CB"/>
+            <path d="M10 32 L14 30" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>
+            <path d="M14 30 L22 31 L26 30" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+        </div>
+        <div class="wordmark-lg">
+          <div class="wordmark-name">Writely</div>
+          <div class="wordmark-tagline">hire great writers. get great work.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="sec-label">Logo on backgrounds</div>
+    <div class="variants-grid">
+
+      <div class="variant-card">
+        <div class="variant-bg white">
+          <div class="logo-inline">
+            <div class="mark-sm" style="width:32px;height:32px;">
+              <svg width="20" height="20" viewBox="0 0 42 42" fill="none">
+                <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                <circle cx="30" cy="12" r="3" fill="#9FE1CB"/>
+                <path d="M10 32 L14 30" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>
+                <path d="M14 30 L22 31 L26 30" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              </svg>
+            </div>
+            <div class="name-sm">Writely</div>
+          </div>
+        </div>
+        <div class="variant-label">On white</div>
+      </div>
+
+      <div class="variant-card">
+        <div class="variant-bg dark">
+          <div class="logo-inline">
+            <div class="mark-sm" style="width:32px;height:32px;">
+              <svg width="20" height="20" viewBox="0 0 42 42" fill="none">
+                <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                <circle cx="30" cy="12" r="3" fill="#9FE1CB"/>
+                <path d="M10 32 L14 30" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>
+                <path d="M14 30 L22 31 L26 30" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              </svg>
+            </div>
+            <div class="name-sm name-dark">Writely</div>
+          </div>
+        </div>
+        <div class="variant-label">On dark</div>
+      </div>
+
+      <div class="variant-card">
+        <div class="variant-bg purple">
+          <div class="logo-inline">
+            <div class="mark-sm" style="width:32px;height:32px;background:rgba(255,255,255,0.18);">
+              <svg width="20" height="20" viewBox="0 0 42 42" fill="none">
+                <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                <circle cx="30" cy="12" r="3" fill="#9FE1CB"/>
+                <path d="M10 32 L14 30" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>
+                <path d="M14 30 L22 31 L26 30" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              </svg>
+            </div>
+            <div class="name-sm name-sm-white">Writely</div>
+          </div>
+        </div>
+        <div class="variant-label">On brand</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="sec-label">Icon mark — app &amp; favicon sizes</div>
+    <div class="app-icon-row">
+      <div class="app-icon" style="width:64px;height:64px;">
+        <svg width="38" height="38" viewBox="0 0 42 42" fill="none">
+          <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+          <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+          <circle cx="30" cy="12" r="3" fill="#9FE1CB"/>
+          <path d="M10 32 L14 30" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>
+          <path d="M14 30 L22 31 L26 30" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+      </div>
+      <div class="app-icon" style="width:48px;height:48px;">
+        <svg width="28" height="28" viewBox="0 0 42 42" fill="none">
+          <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+          <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+          <circle cx="30" cy="12" r="3" fill="#9FE1CB"/>
+          <path d="M10 32 L14 30" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>
+          <path d="M14 30 L22 31 L26 30" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+      </div>
+      <div class="app-icon-sm" style="width:36px;height:36px;">
+        <svg width="20" height="20" viewBox="0 0 42 42" fill="none">
+          <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+          <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+          <circle cx="30" cy="12" r="3" fill="#9FE1CB"/>
+          <path d="M10 32 L14 30" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>
+          <path d="M14 30 L22 31 L26 30" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+      </div>
+      <div class="app-icon-sm" style="width:24px;height:24px;border-radius:6px;">
+        <svg width="14" height="14" viewBox="0 0 42 42" fill="none">
+          <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="3" stroke-linecap="round" fill="none"/>
+          <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="3" stroke-linecap="round" fill="none"/>
+          <circle cx="30" cy="12" r="4" fill="#9FE1CB"/>
+        </svg>
+      </div>
+      <div style="margin-left:8px;">
+        <div style="font-size:11px;color:var(--color-text-secondary);line-height:1.7;">64 · 48 · 36 · 24px</div>
+        <div style="font-size:10px;color:var(--color-text-tertiary);">App store · nav · favicon</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="sec-label">Brand colours</div>
+    <div class="palette-row">
+      <div class="swatch">
+        <div class="swatch-color" style="background:#7F77DD;"></div>
+        <div class="swatch-info"><div class="swatch-name">Ink purple</div><div class="swatch-hex">#7F77DD</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#534AB7;"></div>
+        <div class="swatch-info"><div class="swatch-name">Deep ink</div><div class="swatch-hex">#534AB7</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#EEEDFE;"></div>
+        <div class="swatch-info" style="border-top:0.5px solid var(--color-border-tertiary);"><div class="swatch-name">Ink tint</div><div class="swatch-hex">#EEEDFE</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#1D9E75;"></div>
+        <div class="swatch-info"><div class="swatch-name">Flow teal</div><div class="swatch-hex">#1D9E75</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#9FE1CB;"></div>
+        <div class="swatch-info"><div class="swatch-name">Flow light</div><div class="swatch-hex">#9FE1CB</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#2C2C2A;border:0.5px solid var(--color-border-tertiary);"></div>
+        <div class="swatch-info"><div class="swatch-name">Ink black</div><div class="swatch-hex">#2C2C2A</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="sec-label">Type scale</div>
+    <div class="type-row">
+      <div class="type-item">
+        <div class="type-spec">36px / 500</div>
+        <div style="font-size:28px;font-weight:500;letter-spacing:-.03em;color:#7F77DD;line-height:1;">writely</div>
+      </div>
+      <div class="type-item">
+        <div class="type-spec">22px / 500</div>
+        <div style="font-size:22px;font-weight:500;color:var(--color-text-primary);letter-spacing:-.02em;line-height:1;">Hire great writers</div>
+      </div>
+      <div class="type-item">
+        <div class="type-spec">15px / 500</div>
+        <div style="font-size:15px;font-weight:500;color:var(--color-text-primary);line-height:1;">Section heading style</div>
+      </div>
+      <div class="type-item">
+        <div class="type-spec">13px / 400</div>
+        <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.6;">Body copy — clear, readable, friendly. No jargon.</div>
+      </div>
+      <div class="type-item">
+        <div class="type-spec">11px / 500</div>
+        <div style="font-size:11px;font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:var(--color-text-tertiary);line-height:1;">Label / caption</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="sec-label">Usage in context</div>
+    <div class="usage-grid">
+
+      <div class="usage-card">
+        <div class="usage-preview">
+          <div class="nav-mock">
+            <div class="logo-inline">
+              <div style="width:22px;height:22px;border-radius:6px;background:#7F77DD;display:flex;align-items:center;justify-content:center;">
+                <svg width="13" height="13" viewBox="0 0 42 42" fill="none">
+                  <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="3" stroke-linecap="round" fill="none"/>
+                  <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="3" stroke-linecap="round" fill="none"/>
+                  <circle cx="30" cy="12" r="4" fill="#9FE1CB"/>
+                </svg>
+              </div>
+              <span style="font-size:13px;font-weight:500;color:#7F77DD;letter-spacing:-.01em;">ink<span style="color:#1D9E75;">flow</span></span>
+            </div>
+            <div class="nav-mock-links">
+              <div class="nav-mock-dot"></div>
+              <div class="nav-mock-dot"></div>
+              <div class="nav-mock-dot"></div>
+            </div>
+            <div style="width:52px;height:22px;background:#7F77DD;border-radius:5px;"></div>
+          </div>
+        </div>
+        <div class="usage-desc"><div class="usage-title">Website navbar</div>Logo + nav links + CTA button</div>
+      </div>
+
+      <div class="usage-card">
+        <div class="usage-preview" style="justify-content:center;">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+            <div style="width:52px;height:52px;border-radius:14px;background:#7F77DD;display:flex;align-items:center;justify-content:center;">
+              <svg width="30" height="30" viewBox="0 0 42 42" fill="none">
+                <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                <circle cx="30" cy="12" r="3" fill="#9FE1CB"/>
+                <path d="M10 32 L14 30" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>
+                <path d="M14 30 L22 31 L26 30" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              </svg>
+            </div>
+            <div style="font-size:10px;color:var(--color-text-secondary);">writely</div>
+          </div>
+        </div>
+        <div class="usage-desc"><div class="usage-title">Mobile app icon</div>Icon mark only at 52px</div>
+      </div>
+
+      <div class="usage-card">
+        <div class="usage-preview" style="background:#7F77DD;justify-content:center;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;">
+              <svg width="18" height="18" viewBox="0 0 42 42" fill="none">
+                <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                <circle cx="30" cy="12" r="3" fill="#9FE1CB"/>
+                <path d="M10 32 L14 30" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>
+                <path d="M14 30 L22 31 L26 30" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              </svg>
+            </div>
+            <div>
+              <div style="font-size:14px;font-weight:500;color:#fff;letter-spacing:-.01em;">ink<span style="color:#9FE1CB;">flow</span></div>
+              <div style="font-size:9px;color:rgba(255,255,255,0.65);">hire great writers</div>
+            </div>
+          </div>
+        </div>
+        <div class="usage-desc"><div class="usage-title">Brand colour header</div>Reversed white + teal accent</div>
+      </div>
+
+      <div class="usage-card">
+        <div class="usage-preview" style="justify-content:center;gap:12px;">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+            <div style="width:20px;height:20px;border-radius:5px;background:#7F77DD;display:flex;align-items:center;justify-content:center;">
+              <svg width="12" height="12" viewBox="0 0 42 42" fill="none">
+                <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+                <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+                <circle cx="30" cy="12" r="4.5" fill="#9FE1CB"/>
+              </svg>
+            </div>
+            <div style="font-size:8px;color:var(--color-text-tertiary);">favicon</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+            <div style="width:32px;height:32px;border-radius:8px;background:#7F77DD;display:flex;align-items:center;justify-content:center;">
+              <svg width="18" height="18" viewBox="0 0 42 42" fill="none">
+                <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                <circle cx="30" cy="12" r="3" fill="#9FE1CB"/>
+                <path d="M10 32 L14 30" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>
+                <path d="M14 30 L22 31 L26 30" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              </svg>
+            </div>
+            <div style="font-size:8px;color:var(--color-text-tertiary);">notification</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+            <div style="width:44px;height:44px;border-radius:12px;background:#7F77DD;display:flex;align-items:center;justify-content:center;">
+              <svg width="26" height="26" viewBox="0 0 42 42" fill="none">
+                <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                <circle cx="30" cy="12" r="3" fill="#9FE1CB"/>
+                <path d="M10 32 L14 30" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>
+                <path d="M14 30 L22 31 L26 30" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              </svg>
+            </div>
+            <div style="font-size:8px;color:var(--color-text-tertiary);">app store</div>
+          </div>
+        </div>
+        <div class="usage-desc"><div class="usage-title">Digital touch-points</div>Favicon · push · app store icon</div>
+      </div>
+
+    </div>
+  </div>
+
+</div>

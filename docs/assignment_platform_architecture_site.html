@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Writely | System Architecture</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --ink-purple: #7F77DD;
+            --deep-ink: #534AB7;
+            --ink-tint: #EEEDFE;
+            --flow-teal: #1D9E75;
+            --flow-light: #9FE1CB;
+            --ink-black: #2C2C2A;
+            
+            --bg-primary: #ffffff;
+            --bg-secondary: #F9FAFB;
+            --text-primary: #111827;
+            --text-secondary: #4B5563;
+            --text-tertiary: #9CA3AF;
+            --border: #E5E7EB;
+            
+            --font-sans: 'Inter', sans-serif;
+            
+            /* Tier Colors */
+            --tier-client: #7F77DD;
+            --tier-gateway: #1D9E75;
+            --tier-svc: #3B82F6;
+            --tier-bus: #F59E0B;
+            --tier-data: #EF4444;
+            --tier-ext: #6B7280;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            line-height: 1.5;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 960px;
+            background: white;
+            padding: 48px;
+            border-radius: 32px;
+            box-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.08);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Ambient Background */
+        .container::before {
+            content: '';
+            position: absolute;
+            top: -100px;
+            right: -100px;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(127, 119, 221, 0.05) 0%, rgba(255, 255, 255, 0) 70%);
+            border-radius: 50%;
+            z-index: 0;
+        }
+
+        header {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 56px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 28px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .logo-mark {
+            width: 48px;
+            height: 48px;
+            background: var(--ink-purple);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(127, 119, 221, 0.2);
+        }
+
+        .logo-text {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: var(--ink-purple);
+        }
+
+        .logo-text span {
+            color: var(--flow-teal);
+        }
+
+        .header-meta {
+            text-align: right;
+        }
+
+        .header-meta h1 {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: -0.01em;
+        }
+
+        .header-meta p {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        /* Architecture Grid */
+        .arch-wrap {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tier {
+            padding: 24px 0;
+            transition: all 0.3s ease;
+        }
+
+        .tier-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .tier-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            padding: 5px 12px;
+            border-radius: 8px;
+            background: var(--ink-tint);
+            color: var(--ink-purple);
+            border: 1px solid rgba(127, 119, 221, 0.1);
+        }
+
+        .tier-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .row {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .box {
+            flex: 1;
+            min-width: 160px;
+            padding: 20px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .box:hover {
+            transform: translateY(-4px);
+            border-color: transparent;
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
+        }
+
+        .box::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: var(--ink-purple);
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.3s ease;
+        }
+
+        .box:hover::after {
+            transform: scaleX(1);
+        }
+
+        .box.wide {
+            flex: 2;
+        }
+
+        .box-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .box-sub {
+            font-size: 12.5px;
+            color: var(--text-secondary);
+            opacity: 0.8;
+        }
+
+        .connector {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 48px;
+            position: relative;
+        }
+
+        .connector::before {
+            content: '';
+            width: 1px;
+            height: 100%;
+            background: linear-gradient(to bottom, var(--border), transparent);
+        }
+
+        .connector::after {
+            content: '↓';
+            position: absolute;
+            background: white;
+            padding: 4px;
+            font-size: 18px;
+            color: var(--text-tertiary);
+            font-weight: 300;
+        }
+
+        /* Tier Theming */
+        .tier-1 .tier-label { background: #EEEDFE; color: #7F77DD; }
+        .tier-1 .box:hover { background: #F5F3FF; }
+        .tier-1 .box::after { background: #7F77DD; }
+
+        .tier-2 .tier-label { background: #D1FAE5; color: #059669; }
+        .tier-2 .box:hover { background: #ECFDF5; }
+        .tier-2 .box::after { background: #10B981; }
+
+        .tier-3 .tier-label { background: #DBEAFE; color: #2563EB; }
+        .tier-3 .box:hover { background: #EFF6FF; }
+        .tier-3 .box::after { background: #3B82F6; }
+
+        .tier-4 .tier-label { background: #FEF3C7; color: #D97706; }
+        .tier-4 .box:hover { background: #FFFBEB; }
+        .tier-4 .box::after { background: #F59E0B; }
+
+        .tier-5 .tier-label { background: #FEE2E2; color: #DC2626; }
+        .tier-5 .box:hover { background: #FEF2F2; }
+        .tier-5 .box::after { background: #EF4444; }
+
+        .tier-6 .tier-label { background: #F3F4F6; color: #4B5563; }
+        .tier-6 .box:hover { background: #F9FAFB; }
+        .tier-6 .box::after { background: #6B7280; }
+
+        footer {
+            margin-top: 64px;
+            padding-top: 32px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .legend {
+            display: flex;
+            gap: 20px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 3px;
+        }
+
+        @media (max-width: 768px) {
+            .container { padding: 32px; border-radius: 0; }
+            .row { flex-direction: column; }
+            header { flex-direction: column; align-items: flex-start; gap: 20px; }
+            .header-meta { text-align: left; }
+            .box { min-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div class="logo">
+            <div class="logo-mark">
+                <svg width="28" height="28" viewBox="0 0 42 42" fill="none">
+                    <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                    <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                    <circle cx="30" cy="12" r="3" fill="#9FE1CB"/>
+                </svg>
+            </div>
+            <div class="logo-text">Writely</div>
+        </div>
+        <div class="header-meta">
+            <h1>System Architecture</h1>
+            <p>Scalable Marketplace Infrastructure</p>
+        </div>
+    </header>
+
+    <div class="arch-wrap">
+        <!-- TIER 1: CLIENTS -->
+        <section class="tier tier-1">
+            <div class="tier-header">
+                <span class="tier-label">Tier 1</span>
+                <span class="tier-title">Client Touchpoints</span>
+            </div>
+            <div class="row">
+                <div class="box">
+                    <div class="box-title">Seeker App</div>
+                    <div class="box-sub">Post projects & hire writers</div>
+                </div>
+                <div class="box">
+                    <div class="box-title">Writer App</div>
+                    <div class="box-sub">Bid on work & submit files</div>
+                </div>
+                <div class="box">
+                    <div class="box-title">Admin Dashboard</div>
+                    <div class="box-sub">Ops, moderation & analytics</div>
+                </div>
+            </div>
+        </section>
+
+        <div class="connector"></div>
+
+        <!-- TIER 2: GATEWAY -->
+        <section class="tier tier-2">
+            <div class="tier-header">
+                <span class="tier-label">Tier 2</span>
+                <span class="tier-title">Traffic Management</span>
+            </div>
+            <div class="row">
+                <div class="box wide">
+                    <div class="box-title">API Gateway & Load Balancer</div>
+                    <div class="box-sub">Nginx · Rate Limiting · Auth Interception · Routing</div>
+                </div>
+            </div>
+        </section>
+
+        <div class="connector"></div>
+
+        <!-- TIER 3: MICROSERVICES -->
+        <section class="tier tier-3">
+            <div class="tier-header">
+                <span class="tier-label">Tier 3</span>
+                <span class="tier-title">Business Logic Layer</span>
+            </div>
+            <div class="row">
+                <div class="box">
+                    <div class="box-title">Auth Service</div>
+                    <div class="box-sub">JWT, OAuth2 & OTP</div>
+                </div>
+                <div class="box">
+                    <div class="box-title">Matching Engine</div>
+                    <div class="box-sub">Skill-based algorithmic routing</div>
+                </div>
+                <div class="box">
+                    <div class="box-title">Order Service</div>
+                    <div class="box-sub">Assignment lifecycle management</div>
+                </div>
+            </div>
+            <div class="row" style="margin-top:14px">
+                <div class="box">
+                    <div class="box-title">Payment Service</div>
+                    <div class="box-sub">Escrow, payouts & billing</div>
+                </div>
+                <div class="box">
+                    <div class="box-title">Messaging</div>
+                    <div class="box-sub">Real-time chat & collaboration</div>
+                </div>
+                <div class="box">
+                    <div class="box-title">Notify Service</div>
+                    <div class="box-sub">Cross-channel push notifications</div>
+                </div>
+            </div>
+        </section>
+
+        <div class="connector"></div>
+
+        <!-- TIER 4: MESSAGE BUS -->
+        <section class="tier tier-4">
+            <div class="tier-header">
+                <span class="tier-label">Tier 4</span>
+                <span class="tier-title">Event Streaming</span>
+            </div>
+            <div class="row">
+                <div class="box wide">
+                    <div class="box-title">Kafka Distributed Bus</div>
+                    <div class="box-sub">Asynchronous decoupling & event-driven architecture</div>
+                </div>
+            </div>
+        </section>
+
+        <div class="connector"></div>
+
+        <!-- TIER 5: DATA LAYER -->
+        <section class="tier tier-5">
+            <div class="tier-header">
+                <span class="tier-label">Tier 5</span>
+                <span class="tier-title">Persistence & Cache</span>
+            </div>
+            <div class="row">
+                <div class="box">
+                    <div class="box-title">PostgreSQL</div>
+                    <div class="box-sub">Relational data & ACID</div>
+                </div>
+                <div class="box">
+                    <div class="box-title">Redis</div>
+                    <div class="box-sub">High-speed session cache</div>
+                </div>
+                <div class="box">
+                    <div class="box-title">MongoDB</div>
+                    <div class="box-sub">Flexible logs & metadata</div>
+                </div>
+                <div class="box">
+                    <div class="box-title">AWS S3</div>
+                    <div class="box-sub">Encrypted file storage</div>
+                </div>
+            </div>
+        </section>
+
+        <div class="connector"></div>
+
+        <!-- TIER 6: EXTERNAL -->
+        <section class="tier tier-6">
+            <div class="tier-header">
+                <span class="tier-label">Tier 6</span>
+                <span class="tier-title">External Integration</span>
+            </div>
+            <div class="row">
+                <div class="box">
+                    <div class="box-title">Stripe</div>
+                    <div class="box-sub">Global payment processing</div>
+                </div>
+                <div class="box">
+                    <div class="box-title">SendGrid</div>
+                    <div class="box-sub">Reliable email delivery</div>
+                </div>
+                <div class="box">
+                    <div class="box-title">Firebase FCM</div>
+                    <div class="box-sub">Mobile notification push</div>
+                </div>
+                <div class="box">
+                    <div class="box-title">Turnitin API</div>
+                    <div class="box-sub">Plagiarism verification</div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <footer>
+        <div class="legend">
+            <div class="legend-item"><div class="legend-dot" style="background:var(--ink-purple)"></div> Apps</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--tier-svc)"></div> Services</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--tier-data)"></div> Storage</div>
+        </div>
+        <div style="font-size:12px; color:var(--text-tertiary); font-weight: 500;">v2.4.0-production</div>
+    </footer>
+</div>
+
+</body>
+</html>

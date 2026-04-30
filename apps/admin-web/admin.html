@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel | Writely Operations</title>
+    <link rel="stylesheet" href="../../shared/utils/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-analytics-compat.js"></script>
+    <script src="../../shared/utils/logic.js" defer></script>
+    <style>
+        :root {
+            --admin-bg: #0F172A;
+            --admin-card: #1E293B;
+            --admin-border: #334155;
+            --admin-text: #F8FAFC;
+        }
+        body { 
+            background-color: var(--admin-bg); 
+            color: var(--admin-text);
+        }
+        .admin-layout {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            min-height: 100vh;
+        }
+        .admin-sidebar {
+            background: #020617;
+            border-right: 1px solid var(--admin-border);
+            padding: 32px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+        }
+        .admin-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 10px;
+            color: #94A3B8;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .admin-menu-item:hover, .admin-menu-item.active {
+            background: rgba(127, 119, 221, 0.15);
+            color: var(--ink-purple);
+        }
+        
+        .main-content { padding: 48px; }
+        
+        .grid-4 {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+            margin-bottom: 48px;
+        }
+        .stat-box {
+            background: var(--admin-card);
+            padding: 24px;
+            border-radius: 16px;
+            border: 1px solid var(--admin-border);
+        }
+        .stat-box .label { font-size: 12px; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+        .stat-box .value { font-size: 28px; font-weight: 700; }
+        .stat-box .trend { font-size: 12px; color: var(--flow-light); margin-top: 4px; }
+
+        .table-container {
+            background: var(--admin-card);
+            border-radius: 20px;
+            border: 1px solid var(--admin-border);
+            overflow: hidden;
+        }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { background: rgba(0,0,0,0.2); padding: 16px 24px; font-size: 13px; font-weight: 600; color: #94A3B8; border-bottom: 1px solid var(--admin-border); }
+        td { padding: 18px 24px; font-size: 14px; border-bottom: 1px solid var(--admin-border); }
+        
+        .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; }
+        .bg-success { background: var(--flow-teal); }
+        .bg-warning { background: #F59E0B; }
+        
+        .badge { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+        .badge-purple { background: rgba(127, 119, 221, 0.2); color: var(--ink-purple); }
+    </style>
+</head>
+<body>
+
+    <div class="admin-layout">
+        <aside class="admin-sidebar">
+            <div class="logo">
+                <div class="logo-mark" style="background: var(--ink-purple)">
+                    <svg width="18" height="18" viewBox="0 0 42 42" fill="none">
+                        <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                        <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                        <circle cx="30" cy="12" r="3" fill="#9FE1CB"/>
+                    </svg>
+                </div>
+                Writely <span style="font-size: 10px; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; margin-left: 8px; color: white;">OPS</span>
+            </div>
+            
+            <nav style="display:flex; flex-direction:column; gap:6px;">
+                <a href="#" class="admin-menu-item active">Overview</a>
+                <a href="#" class="admin-menu-item">Assignments</a>
+                <a href="#" class="admin-menu-item">User Verification</a>
+                <a href="#" class="admin-menu-item">Financials</a>
+                <a href="#" class="admin-menu-item">Disputes</a>
+                <a href="assignment_platform_architecture_site.html" class="admin-menu-item">System Health</a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:48px;">
+                <h2 style="font-size: 32px; font-weight: 800; letter-spacing: -0.02em;">Operations Hub</h2>
+                <div style="display:flex; gap:16px; align-items:center;">
+                    <div style="text-align:right">
+                        <div style="font-weight: 600;">System Online</div>
+                        <div style="font-size: 12px; color: var(--flow-teal);">Kafka Latency: 12ms</div>
+                    </div>
+                    <div style="width:40px; height:40px; border-radius:50%; background: #334155; display:flex; align-items:center; justify-content:center;">AD</div>
+                </div>
+            </header>
+
+            <div class="grid-4">
+                <div class="stat-box">
+                    <div class="label">Gross Merchandise Value</div>
+                    <div class="value">$128,450</div>
+                    <div class="trend">+14% vs last month</div>
+                </div>
+                <div class="stat-box">
+                    <div class="label">Active Assignments</div>
+                    <div class="value">1,248</div>
+                    <div class="trend" style="color: var(--ink-purple);">74 currently bidding</div>
+                </div>
+                <div class="stat-box">
+                    <div class="label">Platform Take</div>
+                    <div class="value">$25,690</div>
+                    <div class="trend">+8.2% fee efficiency</div>
+                </div>
+                <div class="stat-box">
+                    <div class="label">Verification Queue</div>
+                    <div class="value">12</div>
+                    <div class="trend" style="color: #F59E0B;">High priority</div>
+                </div>
+            </div>
+
+            <!-- ANALYTICS ENGINE -->
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 48px;">
+                <div class="stat-box">
+                    <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 24px;">Revenue Growth (Last 7 Days)</h3>
+                    <div style="height: 200px; width: 100%; position: relative; display: flex; align-items: flex-end; gap: 12px; padding-bottom: 20px;">
+                        <!-- SVG Chart Simulation -->
+                        <div style="flex: 1; height: 40%; background: var(--ink-purple); border-radius: 4px; opacity: 0.6; position: relative;">
+                            <div style="position: absolute; bottom: -20px; left: 0; width: 100%; text-align: center; font-size: 10px;">MON</div>
+                        </div>
+                        <div style="flex: 1; height: 65%; background: var(--ink-purple); border-radius: 4px; opacity: 0.7; position: relative;">
+                            <div style="position: absolute; bottom: -20px; left: 0; width: 100%; text-align: center; font-size: 10px;">TUE</div>
+                        </div>
+                        <div style="flex: 1; height: 55%; background: var(--ink-purple); border-radius: 4px; opacity: 0.8; position: relative;">
+                            <div style="position: absolute; bottom: -20px; left: 0; width: 100%; text-align: center; font-size: 10px;">WED</div>
+                        </div>
+                        <div style="flex: 1; height: 90%; background: var(--flow-teal); border-radius: 4px; position: relative;">
+                            <div style="position: absolute; bottom: -20px; left: 0; width: 100%; text-align: center; font-size: 10px;">THU</div>
+                        </div>
+                        <div style="flex: 1; height: 75%; background: var(--ink-purple); border-radius: 4px; opacity: 0.9; position: relative;">
+                            <div style="position: absolute; bottom: -20px; left: 0; width: 100%; text-align: center; font-size: 10px;">FRI</div>
+                        </div>
+                        <div style="flex: 1; height: 85%; background: var(--ink-purple); border-radius: 4px; position: relative;">
+                            <div style="position: absolute; bottom: -20px; left: 0; width: 100%; text-align: center; font-size: 10px;">SAT</div>
+                        </div>
+                        <div style="flex: 1; height: 95%; background: var(--ink-purple); border-radius: 4px; position: relative;">
+                            <div style="position: absolute; bottom: -20px; left: 0; width: 100%; text-align: center; font-size: 10px;">SUN</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="stat-box">
+                    <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 24px;">Categories</h3>
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        <div>
+                            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
+                                <span>Economics</span>
+                                <span>42%</span>
+                            </div>
+                            <div style="height: 6px; background: #334155; border-radius: 3px; overflow: hidden;">
+                                <div style="width: 42%; height: 100%; background: var(--ink-purple);"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
+                                <span>Finance</span>
+                                <span>28%</span>
+                            </div>
+                            <div style="height: 6px; background: #334155; border-radius: 3px; overflow: hidden;">
+                                <div style="width: 28%; height: 100%; background: var(--flow-teal);"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
+                                <span>Science</span>
+                                <span>18%</span>
+                            </div>
+                            <div style="height: 6px; background: #334155; border-radius: 3px; overflow: hidden;">
+                                <div style="width: 18%; height: 100%; background: #60A5FA;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <div style="padding: 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--admin-border);">
+                    <h3 style="font-size: 18px; font-weight: 700;">Critical Events Log</h3>
+                    <button class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px; background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--admin-border);">Export CSV</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>EVENT ID</th>
+                            <th>SERVICE</th>
+                            <th>DESCRIPTION</th>
+                            <th>STATUS</th>
+                            <th>TIME</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>#78421</td>
+                            <td><span class="badge badge-purple">PAYMENT</span></td>
+                            <td>Escrow Release: Project #9240 (Sarah J.)</td>
+                            <td><span class="status-dot bg-success"></span> COMPLETED</td>
+                            <td>2 mins ago</td>
+                        </tr>
+                        <tr>
+                            <td>#78420</td>
+                            <td><span class="badge" style="background:rgba(16,185,129,0.1); color:var(--flow-teal);">MATCH</span></td>
+                            <td>Matching successful: Project #9241 → Michael R.</td>
+                            <td><span class="status-dot bg-success"></span> COMPLETED</td>
+                            <td>5 mins ago</td>
+                        </tr>
+                        <tr>
+                            <td>#78419</td>
+                            <td><span class="badge" style="background:rgba(239,68,68,0.1); color:#EF4444;">AUTH</span></td>
+                            <td>Multiple failed login attempts: User @alex99</td>
+                            <td><span class="status-dot bg-warning"></span> INVESTIGATING</td>
+                            <td>12 mins ago</td>
+                        </tr>
+                        <tr>
+                            <td>#78418</td>
+                            <td><span class="badge badge-purple">ORDER</span></td>
+                            <td>New Assignment Posted: "Physics III Lab"</td>
+                            <td><span class="status-dot bg-success"></span> BROADCASTING</td>
+                            <td>15 mins ago</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Triggered by logic.js window.onload
+        console.log('Admin Operations Hub: DOM Link Active');
+    </script>
+</body>
+</html>

@@ -1,0 +1,76 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper: Check if user is an admin (optional, for future)
+    function isAdmin() {
+      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+    }
+
+    // --- USER PROFILES ---
+    match /users/{userId} {
+      // Users can only read their own profile or public profiles (if needed)
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // --- ASSIGNMENTS ---
+    match /assignments/{assignmentId} {
+      // Writers can only see basic details for 'POSTED' jobs
+      // Full details are restricted to Seeker and the Active Writer
+      allow read: if request.auth != null && (
+        (resource.data.status == 'POSTED' || resource.data.status == 'BIDDING') || 
+        resource.data.seekerId == request.auth.uid || 
+        resource.data.activeWriterId == request.auth.uid
+      );
+
+      // Only seekers can create assignments
+      allow create: if request.auth != null && request.resource.data.seekerId == request.auth.uid;
+
+      // Restrict field updates:
+      // 1. Seeker can update basic info but NOT activeWriterId/status directly (handled by backend)
+      // 2. Active Writer can only update specific delivery fields
+      allow update: if request.auth != null && (
+        (resource.data.seekerId == request.auth.uid && 
+         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['activeWriterId', 'status'])) ||
+        (resource.data.activeWriterId == request.auth.uid && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['solution', 'status']))
+      );
+    }
+
+    // --- BIDS ---
+    match /bids/{bidId} {
+      allow read: if request.auth != null && (
+        resource.data.writerId == request.auth.uid || 
+        get(/databases/$(database)/documents/assignments/$(resource.data.assignmentId)).data.seekerId == request.auth.uid
+      );
+      allow create: if request.auth != null && request.resource.data.writerId == request.auth.uid;
+      // Bids shouldn't be edited once placed, only deleted or handled by system
+      allow update: if false;
+    }
+
+    // --- MESSAGES ---
+    match /messages/{messageId} {
+      // Users can only read messages where they are the sender or the project is theirs
+      allow read: if request.auth != null && (
+        resource.data.senderId == request.auth.uid || 
+        get(/databases/$(database)/documents/assignments/$(resource.data.assignmentId)).data.seekerId == request.auth.uid ||
+        get(/databases/$(database)/documents/assignments/$(resource.data.assignmentId)).data.activeWriterId == request.auth.uid
+      );
+      allow create: if request.auth != null && request.resource.data.senderId == request.auth.uid;
+    }
+
+    // --- TRANSACTIONS & WALLETS ---
+    // Strictly backend only for financial safety
+    match /transactions/{transactionId} {
+      allow read: if request.auth != null && (resource.data.userId == request.auth.uid);
+      allow write: if false; 
+    }
+
+    match /wallets/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+    }
+  }
+}

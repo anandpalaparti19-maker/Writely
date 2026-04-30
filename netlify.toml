@@ -1,0 +1,39 @@
+[build]
+  # We publish the root to ensure relative paths to /shared/ and /apps/ work correctly
+  publish = "."
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Redirect the root domain to the seeker-web landing page
+[[redirects]]
+  from = "/"
+  to = "/apps/seeker-web/index.html"
+  status = 200
+
+# Ensure all frontend apps are accessible
+[[redirects]]
+  from = "/seeker/*"
+  to = "/apps/seeker-web/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/writer/*"
+  to = "/apps/writer-mobile/:splat"
+  status = 200
+
+# Security: Prevent access to sensitive files
+[[headers]]
+  for = "/.env"
+  [headers.values]
+    status = 403
+
+[[headers]]
+  for = "/gateway/*"
+  [headers.values]
+    status = 403
+
+[[headers]]
+  for = "/services/*"
+  [headers.values]
+    status = 403

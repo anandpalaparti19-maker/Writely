@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Join Writely | India's Academic Marketplace</title>
+    <link rel="stylesheet" href="../../shared/utils/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+    <script src="../../shared/utils/logic.js" defer></script>
+    <style>
+        body {
+            background: linear-gradient(rgba(127, 119, 221, 0.05), rgba(29, 158, 117, 0.05)), url('https://images.unsplash.com/photo-1434030216411-0b793f4b4173?q=80&w=2070&auto=format&fit=crop');
+            background-size: cover;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .register-card {
+            background: white;
+            padding: 48px;
+            border-radius: 32px;
+            width: 100%;
+            max-width: 520px;
+            box-shadow: 0 24px 64px rgba(0,0,0,0.1);
+        }
+        .role-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .role-option {
+            border: 2px solid var(--border);
+            padding: 20px;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        .role-option:hover { border-color: var(--ink-purple); background: var(--ink-tint); }
+        .role-option.active { border-color: var(--ink-purple); background: var(--ink-tint); }
+        .role-option h4 { margin-bottom: 4px; font-weight: 700; }
+        .role-option p { font-size: 11px; color: var(--text-secondary); }
+
+        .input-group { text-align: left; margin-bottom: 20px; }
+        .input-group label { display: block; font-size: 11px; font-weight: 700; color: var(--text-tertiary); margin-bottom: 6px; text-transform: uppercase; }
+        .input-group input { width: 100%; padding: 14px; border-radius: 10px; border: 1px solid var(--border); }
+    </style>
+</head>
+<body>
+    <div class="register-card">
+        <h2 style="font-weight:800; margin-bottom:8px;">Create an account</h2>
+        <p style="color:var(--text-secondary); font-size:14px; margin-bottom:32px;">Join thousands of experts and students on Writely.</p>
+        
+        <div class="role-selector">
+            <div class="role-option active" onclick="setRole('seeker', this)">
+                <h4>Seeker</h4>
+                <p>I want to hire experts</p>
+            </div>
+            <div class="role-option" onclick="setRole('writer', this)">
+                <h4>Writer</h4>
+                <p>I want to earn writing</p>
+            </div>
+        </div>
+
+        <form id="registerForm" onsubmit="registerUser(event)">
+            <div class="input-group">
+                <label>Full Name</label>
+                <input type="text" id="fullName" placeholder="e.g. Rahul Sharma" required>
+            </div>
+            <div class="input-group">
+                <label>Email Address</label>
+                <input type="email" id="email" placeholder="rahul@example.com" required>
+            </div>
+            <div class="input-group">
+                <label>College / University Name</label>
+                <input type="text" id="collegeName" placeholder="e.g. Delhi University" required>
+            </div>
+            <div class="input-group">
+                <label>Phone Number</label>
+                <input type="tel" id="phoneNumber" placeholder="e.g. +91 9876543210" required>
+            </div>
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="password" placeholder="At least 8 characters" required>
+            </div>
+            <button type="submit" id="submitBtn" class="btn btn-primary" style="width:100%; padding:18px;">Create Account</button>
+        </form>
+        
+        <p style="margin-top:24px; font-size:14px; color:var(--text-secondary); text-align:center;">
+            Already have an account? <a href="login.html" style="color:var(--ink-purple); font-weight:600; text-decoration:none;">Log in</a>
+        </p>
+    </div>
+
+    <script>
+        let selectedRole = 'seeker';
+        function setRole(role, el) {
+            selectedRole = role;
+            document.querySelectorAll('.role-option').forEach(opt => opt.classList.remove('active'));
+            el.classList.add('active');
+        }
+    </script>
+</body>
+</html>

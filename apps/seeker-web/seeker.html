@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seeker Dashboard | Writely</title>
+    <link rel="stylesheet" href="../../shared/utils/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="../../shared/utils/logic.js" defer></script>
+    <style>
+        body { background-color: var(--bg-secondary); }
+        .dashboard-layout {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            min-height: 100vh;
+        }
+        .sidebar {
+            background: white;
+            border-right: 1px solid var(--border);
+            padding: 32px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 40px;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+        }
+        .sidebar-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .menu-item:hover, .menu-item.active {
+            background: var(--ink-tint);
+            color: var(--ink-purple);
+        }
+        .main-content {
+            padding: 40px;
+            overflow-y: auto;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+        .stat-card {
+            background: white;
+            padding: 24px;
+            border-radius: 20px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border);
+        }
+        .stat-val { font-size: 32px; font-weight: 800; color: var(--text-primary); margin: 8px 0; }
+        .stat-lbl { font-size: 13px; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+        
+        .assignment-card {
+            background: white;
+            padding: 24px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: transform 0.2s;
+        }
+        .assignment-card:hover { transform: scale(1.01); border-color: var(--ink-purple); }
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .status-active { background: #E0F2FE; color: #0369A1; }
+        .status-pending { background: #FEF3C7; color: #D97706; }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard-layout">
+        <aside class="sidebar">
+            <a href="index.html" class="logo">
+                <div class="logo-mark">
+                    <svg width="18" height="18" viewBox="0 0 42 42" fill="none">
+                        <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                        <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                        <circle cx="30" cy="12" r="3" fill="#9FE1CB"/>
+                    </svg>
+                </div>
+                Writely
+            </a>
+            
+            <nav class="sidebar-menu">
+                <a href="#" class="menu-item active">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    Dashboard
+                </a>
+                <a href="#" class="menu-item">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                    My Projects
+                </a>
+                <a href="#" class="menu-item">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                    Messages
+                </a>
+                <a href="#" class="menu-item">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+                    Wallet
+                </a>
+            </nav>
+            
+            <div style="margin-top:auto">
+                <a href="#" class="menu-item">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    Profile Settings
+                </a>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <!-- CREATE ORDER MODAL -->
+            <div id="postJobModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(10px); z-index:1000; align-items:center; justify-content:center;">
+                <div style="background:white; padding:40px; border-radius:32px; width:100%; max-width:560px; box-shadow:0 32px 64px rgba(0,0,0,0.2);">
+                    <h2 style="font-weight:800; margin-bottom:8px;">Post New Assignment</h2>
+                    <p style="color:var(--text-secondary); font-size:14px; margin-bottom:32px;">Upload instructions and set your budget in INR.</p>
+                    
+                    <form id="postJobForm" onsubmit="submitJob(event)">
+                        <div style="margin-bottom:20px;">
+                            <label style="display:block; font-size:12px; font-weight:700; color:var(--text-tertiary); margin-bottom:8px; text-transform:uppercase;">Assignment Title</label>
+                            <input type="text" name="title" placeholder="e.g. Machine Learning Thesis" style="width:100%; padding:14px; border-radius:12px; border:1px solid var(--border);" required>
+                        </div>
+                        <div style="margin-bottom:20px;">
+                            <label style="display:block; font-size:12px; font-weight:700; color:var(--text-tertiary); margin-bottom:8px; text-transform:uppercase;">Description</label>
+                            <textarea name="description" rows="3" style="width:100%; padding:14px; border-radius:12px; border:1px solid var(--border);" required></textarea>
+                        </div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
+                            <div>
+                                <label style="display:block; font-size:12px; font-weight:700; color:var(--text-tertiary); margin-bottom:8px; text-transform:uppercase;">Budget (₹)</label>
+                                <input type="number" name="budget" placeholder="e.g. 5000" style="width:100%; padding:14px; border-radius:12px; border:1px solid var(--border);" required>
+                            </div>
+                            <div>
+                                <label style="display:block; font-size:12px; font-weight:700; color:var(--text-tertiary); margin-bottom:8px; text-transform:uppercase;">Attachments</label>
+                                <input type="file" name="attachments" multiple style="width:100%; font-size:12px;">
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:12px; margin-top:32px;">
+                            <button type="button" onclick="closeModal()" class="btn btn-secondary" style="flex:1;">Cancel</button>
+                            <button type="submit" class="btn btn-primary" style="flex:2;">Post Assignment</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:40px;">
+                <div>
+                    <h2 style="font-size: 28px; font-weight: 800; letter-spacing: -0.02em;">Welcome back, Alex</h2>
+                    <p style="color: var(--text-secondary);">Here's what's happening with your assignments.</p>
+                </div>
+                <button onclick="openModal()" class="btn btn-primary">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    New Assignment
+                </button>
+            </header>
+
+            <section class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-lbl">Active Projects</div>
+                    <div class="stat-val">04</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-lbl">Escrow Balance</div>
+                    <div class="stat-val">₹1,24,400</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-lbl">Completed</div>
+                    <div class="stat-val">28</div>
+                </div>
+            </section>
+
+            <section>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+                    <h3 style="font-size: 20px; font-weight: 700;">Recent Assignments</h3>
+                    <a href="#" style="color: var(--ink-purple); font-size: 14px; font-weight: 600; text-decoration: none;">View all</a>
+                </div>
+
+                <div class="assignment-card">
+                    <div>
+                        <div style="font-weight: 700; font-size: 16px; margin-bottom: 4px;">Advanced Macroeconomics Analysis</div>
+                        <div style="color: var(--text-secondary); font-size: 13px;">Writer: Sarah J. • Due in 2 days</div>
+                    </div>
+                    <div style="text-align: right; display: flex; align-items: center; gap: 20px;">
+                        <span class="status-badge status-active">In Progress</span>
+                        <div style="font-weight: 700;">₹25,000</div>
+                    </div>
+                </div>
+
+                <div class="assignment-card">
+                    <div>
+                        <div style="font-weight: 700; font-size: 16px; margin-bottom: 4px;">Organic Chemistry Lab Report</div>
+                        <div style="color: var(--text-secondary); font-size: 13px;">Bidding: 12 offers received</div>
+                    </div>
+                    <div style="text-align: right; display: flex; align-items: center; gap: 20px;">
+                        <span class="status-badge status-pending">Bidding</span>
+                        <div style="font-weight: 700;">₹12,000</div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        function openModal() { document.getElementById('postJobModal').style.display = 'flex'; }
+        function closeModal() { document.getElementById('postJobModal').style.display = 'none'; }
+
+        async function submitJob(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            formData.append('seekerId', '653b8e...'); // Mock current user
+
+            // Visual loading state
+            const btn = form.querySelector('.btn-primary');
+            const originalText = btn.innerText;
+            btn.innerText = 'Uploading...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('http://localhost:5000/api/assignments', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if(response.ok) {
+                    alert('Assignment Posted Successfully with Attachments!');
+                    location.reload();
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Upload failed. Check server connection.');
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

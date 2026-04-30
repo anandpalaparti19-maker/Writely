@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tenant Admin | Writely SaaS</title>
+    <link rel="stylesheet" href="../../shared/utils/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .tenant-sidebar {
+            width: 280px;
+            background: #111827;
+            color: white;
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            position: fixed;
+        }
+        .main-content { margin-left: 280px; padding: 48px; background: #F9FAFB; min-height: 100vh; }
+        .usage-card { background: white; padding: 24px; border-radius: 20px; border: 1px solid #E5E7EB; box-shadow: 0 4px 12px rgba(0,0,0,0.02); }
+        .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-bottom: 40px; }
+        .tenant-logo { padding: 12px; background: rgba(255,255,255,0.1); border-radius: 12px; margin-bottom: 40px; text-align: center; }
+        .nav-item { padding: 12px 16px; border-radius: 12px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; color: #9CA3AF; display: flex; align-items: center; gap: 12px; font-weight: 500; }
+        .nav-item:hover { background: rgba(255,255,255,0.05); color: white; }
+        .nav-item.active { background: var(--ink-purple); color: white; }
+        .plan-badge { padding: 4px 12px; background: #374151; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    </style>
+</head>
+<body>
+
+    <div class="tenant-sidebar">
+        <div class="tenant-logo">
+            <h3 style="font-weight: 800; font-size: 20px;">Elite Academy</h3>
+            <p style="font-size: 11px; opacity: 0.6;">Tenant ID: #TN-992</p>
+        </div>
+
+        <div class="nav-item active">Overview</div>
+        <div class="nav-item">Organization Settings</div>
+        <div class="nav-item">Subscription & Billing</div>
+        <div class="nav-item">Usage Analytics</div>
+        <div class="nav-item">User Management</div>
+        <div class="nav-item">API Keys</div>
+
+        <div style="margin-top: auto;">
+            <div class="usage-card" style="background: rgba(255,255,255,0.05); border: none;">
+                <p style="font-size: 12px; margin-bottom: 8px;">Plan: <span class="plan-badge" style="background: #10B981;">Enterprise</span></p>
+                <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                    <div style="width: 75%; height: 100%; background: #10B981;"></div>
+                </div>
+                <p style="font-size: 11px; margin-top: 8px; opacity: 0.6;">7,500 / 10,000 orders used</p>
+            </div>
+        </div>
+    </div>
+
+    <main class="main-content">
+        <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px;">
+            <div>
+                <h1 style="font-size: 28px; font-weight: 800; letter-spacing: -0.5px;">SaaS Governance Hub</h1>
+                <p style="color: var(--text-secondary);">Manage your private Writely instance and billing.</p>
+            </div>
+            <button onclick="window.location.href='pricing.html'" class="btn btn-primary">Upgrade Plan</button>
+        </header>
+
+        <div class="stat-grid">
+            <div class="usage-card">
+                <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">Active Writers</p>
+                <h2 style="font-size: 24px; font-weight: 800;">142</h2>
+            </div>
+            <div class="usage-card">
+                <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">Assignments (Month)</p>
+                <h2 style="font-size: 24px; font-weight: 800;">1,284</h2>
+            </div>
+            <div class="usage-card">
+                <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">Turnitin Usage</p>
+                <h2 style="font-size: 24px; font-weight: 800;">89%</h2>
+            </div>
+            <div class="usage-card">
+                <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">Monthly Spend</p>
+                <h2 style="font-size: 24px; font-weight: 800;">₹4,28,400</h2>
+            </div>
+        </div>
+
+        <div class="usage-card" style="margin-bottom: 32px;">
+            <h3 style="font-weight: 800; margin-bottom: 20px;">Consumption Analytics</h3>
+            <canvas id="usageChart" height="100"></canvas>
+        </div>
+
+        <div class="usage-card">
+            <h3 style="font-weight: 800; margin-bottom: 20px;">Recent Activity</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="text-align: left; border-bottom: 1px solid #F3F4F6;">
+                        <th style="padding: 12px; font-size: 12px; color: var(--text-tertiary);">EVENT</th>
+                        <th style="padding: 12px; font-size: 12px; color: var(--text-tertiary);">METRIC</th>
+                        <th style="padding: 12px; font-size: 12px; color: var(--text-tertiary);">STATUS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="border-bottom: 1px solid #F3F4F6;">
+                        <td style="padding: 16px;">Tenant Plan Upgraded</td>
+                        <td style="padding: 16px;">+ Enterprise Features</td>
+                        <td style="padding: 16px;"><span style="color: #10B981; font-weight: 600;">Success</span></td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #F3F4F6;">
+                        <td style="padding: 16px;">New Billing Cycle</td>
+                        <td style="padding: 16px;">₹24,999 Base Fee</td>
+                        <td style="padding: 16px;"><span style="color: #10B981; font-weight: 600;">Paid</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <script>
+        const ctx = document.getElementById('usageChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+                datasets: [{
+                    label: 'Platform Orders',
+                    data: [420, 680, 550, 890],
+                    borderColor: '#7F77DD',
+                    tension: 0.4,
+                    fill: true,
+                    backgroundColor: 'rgba(127, 119, 221, 0.05)'
+                }]
+            },
+            options: {
+                plugins: { legend: { display: false } },
+                scales: { y: { display: false }, x: { grid: { display: false } } }
+            }
+        });
+    </script>
+</body>
+</html>

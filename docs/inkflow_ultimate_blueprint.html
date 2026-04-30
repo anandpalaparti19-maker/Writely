@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Writely — Ultimate System Architecture</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0A0A0A;
+            --card-bg: #1C1C1C;
+            --border: #2D2D2D;
+            --text-main: #FFFFFF;
+            --text-dim: #A1A1AA;
+            --accent-blue: #3B82F6;
+            --accent-green: #10B981;
+            --accent-purple: #8B5CF6;
+            --accent-orange: #F59E0B;
+            --accent-red: #EF4444;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: var(--bg); 
+            color: var(--text-main); 
+            padding: 40px;
+            line-height: 1.4;
+        }
+
+        .blueprint { max-width: 1000px; margin: 0 auto; }
+        .header { margin-bottom: 40px; border-bottom: 1px solid var(--border); padding-bottom: 20px; }
+        .header h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; opacity: 0.9; }
+        
+        /* Layer Styles */
+        .layer { margin-bottom: 32px; }
+        .layer-label { 
+            display: inline-block; 
+            font-size: 10px; 
+            font-weight: 800; 
+            padding: 4px 10px; 
+            border-radius: 4px; 
+            background: #2563EB; 
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        .grid-4 { grid-template-columns: repeat(4, 1fr); }
+        
+        .card { 
+            background: var(--card-bg); 
+            border: 1px solid var(--border); 
+            padding: 16px; 
+            border-radius: 8px;
+            position: relative;
+        }
+        .card h4 { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+        .card p { font-size: 11px; color: var(--text-dim); }
+
+        .conn-label { 
+            text-align: center; 
+            font-size: 11px; 
+            color: var(--text-dim); 
+            margin: 12px 0; 
+            font-weight: 500;
+        }
+
+        /* Colors by Layer */
+        .lbl-gateway { background: #374151; }
+        .lbl-services { background: #B45309; }
+        .lbl-payments { background: #065F46; }
+        .lbl-data { background: #991B1B; }
+        .lbl-external { background: #1E293B; }
+
+        /* Process Flow */
+        .flow-container { margin-top: 60px; }
+        .flow-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 20px; }
+        .flow-step { text-align: center; }
+        .flow-num { font-size: 10px; color: var(--text-dim); margin-bottom: 8px; }
+        .flow-box { 
+            background: var(--card-bg); 
+            border: 1px solid var(--border); 
+            padding: 12px 8px; 
+            border-radius: 6px;
+            font-size: 11px;
+            min-height: 70px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .flow-box strong { display: block; margin-bottom: 2px; }
+
+        /* Split Cards */
+        .split-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-top: 20px; }
+        .split-card { 
+            background: var(--card-bg); 
+            padding: 24px; 
+            border-radius: 12px; 
+            border: 1px solid var(--border);
+        }
+        .split-val { font-size: 32px; font-weight: 800; margin-bottom: 4px; color: var(--accent-green); }
+        .split-lbl { font-size: 13px; font-weight: 700; }
+        .split-sub { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+
+        .pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+        .pill { background: #262626; padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; border: 1px solid var(--border); }
+    </style>
+</head>
+<body>
+
+<div class="blueprint">
+    <div class="header">
+        <h1>Writely — System Architecture & Payment Processing</h1>
+    </div>
+
+    <!-- CLIENT LAYER -->
+    <div class="layer">
+        <div class="layer-label">Client Layer</div>
+        <div class="grid">
+            <div class="card"><h4>Seeker Web</h4><p>Next.js · React · Order Management</p></div>
+            <div class="card"><h4>Writer Mobile</h4><p>React Native · iOS · Android · Feed</p></div>
+            <div class="card"><h4>Tenant Admin</h4><p>SaaS Control Panel · Organization Ops</p></div>
+        </div>
+    </div>
+
+    <div class="conn-label">↕ HTTPS · WebSockets</div>
+
+    <!-- GATEWAY LAYER -->
+    <div class="layer">
+        <div class="layer-label lbl-gateway">Gateway Layer</div>
+        <div class="grid">
+            <div class="card"><h4>Nginx Edge</h4><p>SSL Termination · Static Asset Caching</p></div>
+            <div class="card"><h4>Load Balancer</h4><p>AWS ALB · Multi-AZ Traffic Routing</p></div>
+            <div class="card"><h4>API Gateway</h4><p>JWT Auth · Rate Limiting · Route Proxy</p></div>
+        </div>
+    </div>
+
+    <div class="conn-label">↕ Internal gRPC / RPC</div>
+
+    <!-- CORE MICROSERVICES -->
+    <div class="layer">
+        <div class="layer-label lbl-services">Core Microservices</div>
+        <div class="grid">
+            <div class="card"><h4>Auth Service</h4><p>Multi-tenant Identity · OTP · JWT</p></div>
+            <div class="card"><h4>User Service</h4><p>Expert KYC · Rating System · Profiles</p></div>
+            <div class="card"><h4>Assignment Svc</h4><p>Order Lifecycle · State Machine</p></div>
+            <div class="card"><h4>Matching Engine</h4><p>Geo-index · ETA · Expert Dispatch</p></div>
+            <div class="card"><h4>Review Service</h4><p>Turnitin API · AI Detection · Quality</p></div>
+            <div class="card"><h4>Notification Hub</h4><p>Firebase · SMS · Push Alerts</p></div>
+        </div>
+    </div>
+
+    <div class="conn-label">↕ REST / Event Streams</div>
+
+    <!-- PAYMENT & SAAS SERVICES -->
+    <div class="layer">
+        <div class="layer-label lbl-payments">SaaS & Payment Services</div>
+        <div class="grid">
+            <div class="card"><h4>Escrow Service</h4><p>Fund Locking · Smart Release Triggers</p></div>
+            <div class="card"><h4>Wallet Service</h4><p>Credits · Internal Ledger · Payouts</p></div>
+            <div class="card"><h4>Pricing Engine</h4><p>Dynamic Commission · Service Fees</p></div>
+            <div class="card"><h4>Tenant Service</h4><p>Org Provisioning · SaaS Config</p></div>
+        </div>
+    </div>
+
+    <div class="conn-label">↕ Publish / Subscribe</div>
+
+    <!-- DATA LAYER -->
+    <div class="layer">
+        <div class="layer-label lbl-data">Data Layer</div>
+        <div class="grid-4 grid">
+            <div class="card"><h4>Redis</h4><p>Session · Cache · Locks</p></div>
+            <div class="card"><h4>MongoDB</h4><p>Users · Orders · SaaS</p></div>
+            <div class="card"><h4>PostgreSQL</h4><p>Ledger · Financials</p></div>
+            <div class="card"><h4>Elasticsearch</h4><p>Log Analytics · Search</p></div>
+        </div>
+    </div>
+
+    <!-- EXTERNAL -->
+    <div class="layer">
+        <div class="layer-label lbl-external">External Services</div>
+        <div class="grid">
+            <div class="card"><h4>Stripe / Razorpay</h4><p>Payment Gateway · UPI · Cards</p></div>
+            <div class="card"><h4>Turnitin API</h4><p>Plagiarism Verification</p></div>
+            <div class="card"><h4>Firebase / Twilio</h4><p>Push Notifications · SMS OTP</p></div>
+        </div>
+    </div>
+
+    <!-- PROCESS FLOW -->
+    <div class="flow-container">
+        <div class="layer-label lbl-gateway" style="background:transparent; border: 1px solid var(--border); color: var(--text-dim);">Assignment Process Flow</div>
+        <div class="flow-grid">
+            <div class="flow-step"><div class="flow-num">01</div><div class="flow-box"><strong>Job Posted</strong>Seeker creates order</div></div>
+            <div class="flow-step"><div class="flow-num">02</div><div class="flow-box"><strong>Bidding Open</strong>Experts submit quotes</div></div>
+            <div class="flow-step"><div class="flow-num">03</div><div class="flow-box"><strong>Writer Select</strong>Seeker hires expert</div></div>
+            <div class="flow-step"><div class="flow-num">04</div><div class="flow-box"><strong>Escrow Lock</strong>Funds held securely</div></div>
+            <div class="flow-step"><div class="flow-num">05</div><div class="flow-box"><strong>Work Start</strong>Expert begins drafting</div></div>
+            <div class="flow-step"><div class="flow-num">06</div><div class="flow-box"><strong>Review</strong>AI & Plagiarism check</div></div>
+            <div class="flow-step"><div class="flow-num">07</div><div class="flow-box"><strong>Settlement</strong>Funds released to Writer</div></div>
+        </div>
+    </div>
+
+    <!-- ACCEPTED PAYMENTS -->
+    <div style="margin-top:40px;">
+        <div class="layer-label lbl-gateway" style="background:transparent; border: 1px solid var(--border); color: var(--text-dim);">Accepted Payment Methods</div>
+        <div class="pills">
+            <div class="pill">UPI (GPay · PhonePe · BHIM)</div>
+            <div class="pill">Credit Card</div>
+            <div class="pill">Debit Card</div>
+            <div class="pill">Net Banking</div>
+            <div class="pill">Writely Wallet</div>
+            <div class="pill">Cash on Delivery</div>
+            <div class="pill">EMI</div>
+        </div>
+    </div>
+
+    <!-- REVENUE SPLIT -->
+    <div style="margin-top:40px;">
+        <div class="layer-label lbl-payments">Revenue Split per Assignment</div>
+        <div class="split-grid">
+            <div class="split-card">
+                <div class="split-val">~85%</div>
+                <div class="split-lbl">Writer Payout</div>
+                <div class="split-sub">Direct Transfer to Expert Bank · T+1</div>
+            </div>
+            <div class="split-card">
+                <div class="split-val">~15%</div>
+                <div class="split-lbl">Platform Commission</div>
+                <div class="split-sub">Operations · Tech · Marketing · Support</div>
+            </div>
+            <div class="split-card">
+                <div class="split-val">₹249</div>
+                <div class="split-lbl">Service Fee</div>
+                <div class="split-sub">Fixed processing fee per transaction</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,31 @@
+services:
+  # --- BACKEND: API Gateway ---
+  - type: web
+    name: writely-api
+    env: node
+    region: singapore # Optimized for India
+    plan: free
+    rootDir: gateway/api-gateway
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: PORT
+        value: 5001
+      - key: NODE_ENV
+        value: production
+      - fromGroup: writely-secrets # We'll expect these to be set in Render dashboard
+
+  # --- FRONTEND: Seeker Portal ---
+  - type: static
+    name: writely-seeker
+    env: static
+    buildCommand: "" # No build needed for plain HTML
+    publishDir: "."
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=3600
+    routes:
+      - type: rewrite
+        from: /
+        to: /apps/seeker-web/index.html

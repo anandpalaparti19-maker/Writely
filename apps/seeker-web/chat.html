@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Messages | Writely Collaboration</title>
+    <link rel="stylesheet" href="../../shared/utils/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="logic.js" defer></script>
+    <style>
+        body { background-color: var(--bg-secondary); }
+        .chat-layout {
+            display: grid;
+            grid-template-columns: 320px 1fr 300px;
+            height: 100vh;
+            background: white;
+        }
+        
+        /* Sidebar / Channels */
+        .chat-sidebar {
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            background: #F8F9FF;
+        }
+        .sidebar-header { padding: 24px; border-bottom: 1px solid var(--border); }
+        .search-box {
+            padding: 10px 16px;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            font-size: 14px;
+            width: 100%;
+        }
+        .conversation-list { overflow-y: auto; flex: 1; }
+        .convo-item {
+            padding: 16px 24px;
+            display: flex;
+            gap: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+            border-bottom: 1px solid rgba(0,0,0,0.02);
+        }
+        .convo-item:hover { background: #EEEDFE; }
+        .convo-item.active { background: white; border-left: 4px solid var(--ink-purple); }
+        .avatar { width: 44px; height: 44px; border-radius: 12px; background: #E5E7EB; flex-shrink: 0; }
+        .convo-info { flex: 1; min-width: 0; }
+        .convo-name { font-weight: 600; font-size: 14px; margin-bottom: 2px; display: flex; justify-content: space-between; }
+        .convo-last { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .convo-time { font-size: 10px; color: var(--text-tertiary); font-weight: 500; }
+
+        /* Chat Window */
+        .chat-main { display: flex; flex-direction: column; height: 100%; }
+        .chat-header {
+            padding: 18px 32px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .messages-area {
+            flex: 1;
+            padding: 32px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            background: #ffffff;
+        }
+        .msg { display: flex; gap: 12px; max-width: 70%; }
+        .msg.me { align-self: flex-end; flex-direction: row-reverse; }
+        .msg-bubble {
+            padding: 12px 18px;
+            border-radius: 18px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .msg-bubble.them { background: #F3F4F6; color: var(--text-primary); border-top-left-radius: 4px; }
+        .msg-bubble.me { background: var(--ink-purple); color: white; border-top-right-radius: 4px; }
+        
+        .chat-input-area { padding: 24px 32px; border-top: 1px solid var(--border); }
+        .input-wrap {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background: #F9FAFB;
+            padding: 8px 16px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+        }
+        .input-wrap input { flex: 1; border: none; background: transparent; padding: 10px; font-size: 14px; outline: none; }
+
+        /* Right Panel / Project Info */
+        .project-panel {
+            background: #F8F9FF;
+            border-left: 1px solid var(--border);
+            padding: 32px 24px;
+        }
+        .panel-section { margin-bottom: 32px; }
+        .panel-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-tertiary); margin-bottom: 16px; }
+        .file-card {
+            background: white;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="chat-layout">
+        <!-- Sidebar -->
+        <aside class="chat-sidebar">
+            <div class="sidebar-header">
+                <div class="logo" style="margin-bottom: 24px;">
+                    <div class="logo-mark" style="width:32px; height:32px;">
+                        <svg width="16" height="16" viewBox="0 0 42 42" fill="none">
+                            <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                            <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                            <circle cx="30" cy="12" r="3" fill="#9FE1CB"/>
+                        </svg>
+                    </div>
+                    Writely
+                </div>
+                <input type="text" class="search-box" placeholder="Search messages...">
+            </div>
+            
+            <div class="conversation-list">
+                <div class="convo-item active">
+                    <div class="avatar" style="background: var(--ink-tint);"></div>
+                    <div class="convo-info">
+                        <div class="convo-name">Sarah Jenkins <span class="convo-time">10:24 AM</span></div>
+                        <div class="convo-last">I've uploaded the first draft of the analysis...</div>
+                    </div>
+                </div>
+                <div class="convo-item">
+                    <div class="avatar" style="background: #D1FAE5;"></div>
+                    <div class="convo-info">
+                        <div class="convo-name">Michael Ross <span class="convo-time">Yesterday</span></div>
+                        <div class="convo-last">The citation style you requested is done.</div>
+                    </div>
+                </div>
+                <div class="convo-item">
+                    <div class="avatar" style="background: #FEE2E2;"></div>
+                    <div class="convo-info">
+                        <div class="convo-name">Support Bot <span class="convo-time">Mon</span></div>
+                        <div class="convo-last">Your escrow payment of $450 was successful.</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="chat-main">
+            <header class="chat-header">
+                <div>
+                    <h3 style="font-size: 16px; font-weight: 700;">Sarah Jenkins</h3>
+                    <div style="font-size: 12px; color: var(--flow-teal);">● Online · Elite Academic Writer</div>
+                </div>
+                <div style="display:flex; gap:12px;">
+                    <button class="btn btn-secondary" style="padding: 8px 16px; font-size: 13px;">View Project</button>
+                    <button class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;">Release Funds</button>
+                </div>
+            </header>
+
+            <div class="messages-area">
+                <div class="msg">
+                    <div class="avatar" style="width:32px; height:32px; background: var(--ink-tint);"></div>
+                    <div class="msg-bubble them">
+                        Hi Alex! I've started on the Macroeconomics Analysis. I have a quick question about the dataset you provided.
+                    </div>
+                </div>
+                <div class="msg me">
+                    <div class="msg-bubble me">
+                        Sure, go ahead. Is something missing?
+                    </div>
+                </div>
+                <div class="msg">
+                    <div class="avatar" style="width:32px; height:32px; background: var(--ink-tint);"></div>
+                    <div class="msg-bubble them">
+                        No, everything is there, but should I prioritize the 2024 projections or focus on the historical data from 2020-2023?
+                    </div>
+                </div>
+                <div class="msg me">
+                    <div class="msg-bubble me">
+                        Focus more on the 2024 projections. That's the core of the thesis.
+                    </div>
+                </div>
+                <div class="msg">
+                    <div class="avatar" style="width:32px; height:32px; background: var(--ink-tint);"></div>
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        <div class="msg-bubble them">
+                            Got it. I've uploaded the preliminary outline here for you to check.
+                        </div>
+                        <div class="file-card">
+                            <div style="width:32px; height:32px; background:#EEEDFE; border-radius:8px; display:flex; align-items:center; justify-content:center; color:var(--ink-purple);">PDF</div>
+                            <div>
+                                <div style="font-size:13px; font-weight:600;">Analysis_Outline.pdf</div>
+                                <div style="font-size:11px; color:var(--text-tertiary);">1.2 MB · Just now</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-input-area">
+                <div class="input-wrap">
+                    <button style="background:none; border:none; color:var(--text-tertiary); cursor:pointer;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                    </button>
+                    <input type="text" placeholder="Type a message to Sarah...">
+                    <button class="btn btn-primary" style="padding: 8px; border-radius: 10px;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Right Panel -->
+        <aside class="project-panel">
+            <div class="panel-section">
+                <div class="panel-title">Current Project</div>
+                <h4 style="font-size:15px; font-weight:700; margin-bottom:8px;">Macroeconomics Analysis</h4>
+                <div style="font-size:13px; color:var(--text-secondary); margin-bottom:12px;">Budget: $350.00</div>
+                <div class="status-badge status-active" style="display:inline-block">In Progress</div>
+            </div>
+
+            <div class="panel-section">
+                <div class="panel-title">Shared Files</div>
+                <div class="file-card">
+                    <div style="width:28px; height:28px; background:#F3F4F6; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700;">CSV</div>
+                    <div style="font-size:12px;">Economic_Data_v2.csv</div>
+                </div>
+                <div class="file-card">
+                    <div style="width:28px; height:28px; background:#F3F4F6; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700;">DOC</div>
+                    <div style="font-size:12px;">Requirements_Final.docx</div>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <div class="panel-title">Project Stats</div>
+                <div style="display:flex; flex-direction:column; gap:12px;">
+                    <div style="display:flex; justify-content:space-between; font-size:12px;">
+                        <span style="color:var(--text-secondary);">Words written</span>
+                        <span style="font-weight:600;">~1,250</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:12px;">
+                        <span style="color:var(--text-secondary);">Hours logged</span>
+                        <span style="font-weight:600;">4.5h</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+</body>
+</html>

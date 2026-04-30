@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subscription Plans | Writely SaaS</title>
+    <link rel="stylesheet" href="../../shared/utils/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { background: #F9FAFB; padding: 60px 20px; }
+        .pricing-container { max-width: 1100px; margin: 0 auto; text-align: center; }
+        .pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin-top: 60px; }
+        .pricing-card { 
+            background: white; 
+            padding: 48px 32px; 
+            border-radius: 32px; 
+            border: 1px solid var(--border);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+        .pricing-card:hover { transform: translateY(-12px); box-shadow: 0 32px 64px rgba(0,0,0,0.08); border-color: var(--ink-purple); }
+        .pricing-card.popular { border: 2px solid var(--ink-purple); }
+        .popular-badge {
+            position: absolute;
+            top: -14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--ink-purple);
+            color: white;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .price { font-size: 48px; font-weight: 800; margin: 24px 0; letter-spacing: -2px; }
+        .price span { font-size: 16px; font-weight: 500; color: var(--text-secondary); letter-spacing: 0; }
+        .features { text-align: left; margin: 32px 0; flex: 1; }
+        .feature-item { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; font-size: 14px; color: var(--text-secondary); }
+        .feature-item svg { color: var(--flow-teal); flex-shrink: 0; }
+    </style>
+</head>
+<body>
+
+    <div class="pricing-container">
+        <h1 style="font-size: 40px; font-weight: 800; letter-spacing: -1px; margin-bottom: 16px;">Scale your Writing Agency</h1>
+        <p style="color: var(--text-secondary); font-size: 18px;">Choose the plan that fits your organization's needs.</p>
+
+        <div class="pricing-grid">
+            <!-- STARTER -->
+            <div class="pricing-card">
+                <h3 style="font-weight: 800;">Starter</h3>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-top: 8px;">For small teams & explorers</p>
+                <div class="price">₹0<span>/month</span></div>
+                <div class="features">
+                    <div class="feature-item"><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> 10 Assignments /mo</div>
+                    <div class="feature-item"><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> Standard Matching</div>
+                    <div class="feature-item"><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> Email Support</div>
+                </div>
+                <button class="btn btn-secondary" style="width:100%; padding:16px;">Current Plan</button>
+            </div>
+
+            <!-- PRO -->
+            <div class="pricing-card popular">
+                <div class="popular-badge">Most Popular</div>
+                <h3 style="font-weight: 800;">Professional</h3>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-top: 8px;">For growing writing agencies</p>
+                <div class="price">₹4,999<span>/month</span></div>
+                <div class="features">
+                    <div class="feature-item"><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> 100 Assignments /mo</div>
+                    <div class="feature-item"><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> Priority Dispatch</div>
+                    <div class="feature-item"><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> Custom Branding</div>
+                    <div class="feature-item"><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> Dedicated Support</div>
+                </div>
+                <button class="btn btn-primary" style="width:100%; padding:16px;">Upgrade Now</button>
+            </div>
+
+            <!-- ENTERPRISE -->
+            <div class="pricing-card">
+                <h3 style="font-weight: 800;">Enterprise</h3>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-top: 8px;">For large institutions</p>
+                <div class="price">Custom</div>
+                <div class="features">
+                    <div class="feature-item"><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> Unlimited Assignments</div>
+                    <div class="feature-item"><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> Full API Access</div>
+                    <div class="feature-item"><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> SSO & Security Pack</div>
+                    <div class="feature-item"><svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> Account Manager</div>
+                </div>
+                <button class="btn btn-secondary" style="width:100%; padding:16px;">Contact Sales</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

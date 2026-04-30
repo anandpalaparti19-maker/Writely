@@ -1,0 +1,197 @@
+
+<style>
+.ra{font-family:var(--font-sans);padding:1rem 0}
+.ra .sec{margin-bottom:14px}
+.ra .sec-label{font-size:10px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px;padding:3px 8px;border-radius:4px;display:inline-block}
+.ra .row{display:flex;gap:6px}
+.ra .row+.row{margin-top:6px}
+.ra .box{flex:1;padding:9px 12px;border-radius:8px;border:.5px solid var(--color-border-secondary);background:var(--color-background-secondary);min-width:0;cursor:pointer;transition:opacity .15s}
+.ra .box:hover{opacity:.72}
+.ra .box.wide{flex:2}
+.ra .bt{font-size:12px;font-weight:500;color:var(--color-text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ra .bs{font-size:11px;color:var(--color-text-secondary);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ra .layer{border-left:3px solid transparent;padding-left:10px}
+.ra .layer-client{border-left-color:var(--color-border-info)}
+.ra .layer-svc{border-left-color:var(--color-border-warning)}
+.ra .layer-pay{border-left-color:var(--color-border-success)}
+.ra .layer-data{border-left-color:var(--color-border-danger)}
+.ra .lbl-client{background:var(--color-background-info);color:var(--color-text-info)}
+.ra .lbl-gw{background:var(--color-background-secondary);color:var(--color-text-secondary)}
+.ra .lbl-svc{background:var(--color-background-warning);color:var(--color-text-warning)}
+.ra .lbl-pay{background:var(--color-background-success);color:var(--color-text-success)}
+.ra .lbl-evt{background:var(--color-background-warning);color:var(--color-text-warning)}
+.ra .lbl-data{background:var(--color-background-danger);color:var(--color-text-danger)}
+.ra .lbl-ext{background:var(--color-background-secondary);color:var(--color-text-secondary)}
+.ra .conn{text-align:center;font-size:11px;color:var(--color-text-tertiary);margin:6px 0;letter-spacing:1px}
+.ra .divider{border:none;border-top:.5px solid var(--color-border-tertiary);margin:20px 0}
+.ra .section-title{font-size:14px;font-weight:500;color:var(--color-text-primary);margin-bottom:14px}
+.ra .pflow{display:flex;align-items:stretch;gap:0;margin-bottom:16px;overflow-x:auto}
+.ra .pf-step{display:flex;flex-direction:column;align-items:center;flex:1;min-width:76px}
+.ra .pf-num{font-size:9px;font-weight:500;color:var(--color-text-tertiary);margin-bottom:4px}
+.ra .pf-box{padding:8px 6px;border-radius:8px;border:.5px solid var(--color-border-secondary);background:var(--color-background-secondary);text-align:center;width:100%;box-sizing:border-box}
+.ra .pf-lbl{font-size:12px;font-weight:500;color:var(--color-text-primary)}
+.ra .pf-sub{font-size:10px;color:var(--color-text-secondary);margin-top:2px}
+.ra .pf-arr{display:flex;align-items:center;padding:0 4px;color:var(--color-text-tertiary);font-size:13px;padding-top:18px;flex-shrink:0}
+.ra .tag-row{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:14px}
+.ra .tag{padding:4px 10px;border-radius:20px;border:.5px solid var(--color-border-secondary);background:var(--color-background-secondary);font-size:11px;font-weight:500;color:var(--color-text-secondary)}
+.ra .split-row{display:flex;gap:8px}
+.ra .split-box{flex:1;padding:12px;border-radius:8px;border:.5px solid var(--color-border-secondary);background:var(--color-background-secondary)}
+.ra .split-pct{font-size:22px;font-weight:500;color:var(--color-text-primary)}
+.ra .split-lbl{font-size:12px;font-weight:500;color:var(--color-text-primary);margin-top:2px}
+.ra .split-sub{font-size:11px;color:var(--color-text-secondary);margin-top:3px}
+.ra .refund-row{display:flex;gap:6px;margin-top:14px}
+</style>
+
+<div class="ra">
+  <div class="section-title" style="font-size:16px;margin-bottom:20px">Rapido — system architecture &amp; payment processing</div>
+
+  <!-- 1. CLIENT -->
+  <div class="sec layer layer-client">
+    <div class="sec-label lbl-client">Client layer</div>
+    <div class="row">
+      <div class="box"><div class="bt">Rider app</div><div class="bs">Android · iOS · React Native</div></div>
+      <div class="box"><div class="bt">Captain app</div><div class="bs">Android · GPS · earnings</div></div>
+      <div class="box"><div class="bt">Admin portal</div><div class="bs">Web · ops dashboard</div></div>
+    </div>
+  </div>
+
+  <div class="conn">↕ HTTPS · WebSocket</div>
+
+  <!-- 2. GATEWAY -->
+  <div class="sec">
+    <div class="sec-label lbl-gw">Gateway layer</div>
+    <div class="row">
+      <div class="box"><div class="bt">CDN / Edge</div><div class="bs">CloudFront · static assets</div></div>
+      <div class="box"><div class="bt">Load balancer</div><div class="bs">Nginx · round-robin</div></div>
+      <div class="box"><div class="bt">API gateway</div><div class="bs">Rate limit · auth check · routing</div></div>
+    </div>
+  </div>
+
+  <div class="conn">↕ Internal RPC / gRPC</div>
+
+  <!-- 3. CORE SERVICES -->
+  <div class="sec layer layer-svc">
+    <div class="sec-label lbl-svc">Core microservices</div>
+    <div class="row">
+      <div class="box"><div class="bt">Auth service</div><div class="bs">OTP · JWT · OAuth2</div></div>
+      <div class="box"><div class="bt">User service</div><div class="bs">Profiles · KYC · ratings</div></div>
+      <div class="box"><div class="bt">Booking service</div><div class="bs">Ride lifecycle · state machine</div></div>
+    </div>
+    <div class="row">
+      <div class="box"><div class="bt">Matching engine</div><div class="bs">Geo-index · ETA · dispatch</div></div>
+      <div class="box"><div class="bt">Tracking service</div><div class="bs">WebSocket · live GPS stream</div></div>
+      <div class="box"><div class="bt">Notification service</div><div class="bs">FCM · SMS · in-app alerts</div></div>
+    </div>
+  </div>
+
+  <div class="conn">↕ REST / events</div>
+
+  <!-- 4. PAYMENT SERVICES -->
+  <div class="sec layer layer-pay">
+    <div class="sec-label lbl-pay">Payment services</div>
+    <div class="row">
+      <div class="box"><div class="bt">Payment service</div><div class="bs">Gateway orchestration · idempotency</div></div>
+      <div class="box"><div class="bt">Wallet service</div><div class="bs">Credits · cashback · top-up</div></div>
+      <div class="box"><div class="bt">Pricing engine</div><div class="bs">Surge · fare calc · toll</div></div>
+      <div class="box"><div class="bt">Settlement service</div><div class="bs">Ledger · T+1 driver payouts</div></div>
+    </div>
+  </div>
+
+  <div class="conn">↕ Publish / subscribe</div>
+
+  <!-- 5. EVENT BUS -->
+  <div class="sec">
+    <div class="sec-label lbl-evt">Event bus</div>
+    <div class="row">
+      <div class="box wide"><div class="bt">Kafka event bus</div><div class="bs">ride.started · ride.completed · payment.success · payment.failed · driver.location · surge.updated</div></div>
+      <div class="box"><div class="bt">Redis streams</div><div class="bs">Real-time pub/sub · session cache</div></div>
+    </div>
+  </div>
+
+  <div class="conn">↕ Read / write</div>
+
+  <!-- 6. DATA LAYER -->
+  <div class="sec layer layer-data">
+    <div class="sec-label lbl-data">Data layer</div>
+    <div class="row">
+      <div class="box"><div class="bt">Redis</div><div class="bs">Session · geo-cache · locks</div></div>
+      <div class="box"><div class="bt">MongoDB</div><div class="bs">Rides · users · documents</div></div>
+      <div class="box"><div class="bt">PostgreSQL</div><div class="bs">Payments · ledger · ACID</div></div>
+      <div class="box"><div class="bt">Elasticsearch</div><div class="bs">Logs · search · analytics</div></div>
+    </div>
+  </div>
+
+  <div class="conn">↕ External API calls</div>
+
+  <!-- 7. EXTERNAL -->
+  <div class="sec">
+    <div class="sec-label lbl-ext">External services</div>
+    <div class="row">
+      <div class="box"><div class="bt">Google Maps API</div><div class="bs">Routing · distance matrix</div></div>
+      <div class="box"><div class="bt">Razorpay / PayU</div><div class="bs">UPI · cards · net banking</div></div>
+      <div class="box"><div class="bt">MSG91 / Firebase</div><div class="bs">SMS OTP · push notifications</div></div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- PAYMENT FLOW -->
+  <div class="section-title">Payment process flow</div>
+
+  <div class="pflow">
+    <div class="pf-step"><div class="pf-num">01</div><div class="pf-box"><div class="pf-lbl">Ride ends</div><div class="pf-sub">Captain marks complete</div></div></div>
+    <div class="pf-arr">›</div>
+    <div class="pf-step"><div class="pf-num">02</div><div class="pf-box"><div class="pf-lbl">Fare computed</div><div class="pf-sub">Distance + surge + toll</div></div></div>
+    <div class="pf-arr">›</div>
+    <div class="pf-step"><div class="pf-num">03</div><div class="pf-box"><div class="pf-lbl">Mode selected</div><div class="pf-sub">UPI / card / wallet / cash</div></div></div>
+    <div class="pf-arr">›</div>
+    <div class="pf-step"><div class="pf-num">04</div><div class="pf-box"><div class="pf-lbl">Gateway call</div><div class="pf-sub">Razorpay / PayU API</div></div></div>
+    <div class="pf-arr">›</div>
+    <div class="pf-step"><div class="pf-num">05</div><div class="pf-box"><div class="pf-lbl">Bank auth</div><div class="pf-sub">Debit + webhook callback</div></div></div>
+    <div class="pf-arr">›</div>
+    <div class="pf-step"><div class="pf-num">06</div><div class="pf-box"><div class="pf-lbl">Confirmation</div><div class="pf-sub">Event published to Kafka</div></div></div>
+    <div class="pf-arr">›</div>
+    <div class="pf-step"><div class="pf-num">07</div><div class="pf-box"><div class="pf-lbl">Settlement</div><div class="pf-sub">T+1 driver bank transfer</div></div></div>
+  </div>
+
+  <!-- Payment Methods -->
+  <div style="margin-bottom:8px"><div class="sec-label lbl-gw">Accepted payment methods</div></div>
+  <div class="tag-row">
+    <div class="tag">UPI (GPay · PhonePe · BHIM)</div>
+    <div class="tag">Credit card</div>
+    <div class="tag">Debit card</div>
+    <div class="tag">Net banking</div>
+    <div class="tag">Rapido wallet</div>
+    <div class="tag">Cash</div>
+    <div class="tag">EMI</div>
+  </div>
+
+  <!-- Revenue Split -->
+  <div style="margin-bottom:8px"><div class="sec-label lbl-pay">Revenue split per ride</div></div>
+  <div class="split-row">
+    <div class="split-box">
+      <div class="split-pct">~80%</div>
+      <div class="split-lbl">Captain payout</div>
+      <div class="split-sub">Direct IMPS/NEFT to bank · T+1</div>
+    </div>
+    <div class="split-box">
+      <div class="split-pct">~20%</div>
+      <div class="split-lbl">Platform commission</div>
+      <div class="split-sub">Operations · tech · marketing</div>
+    </div>
+    <div class="split-box">
+      <div class="split-pct">Wallet</div>
+      <div class="split-lbl">Rapido credits</div>
+      <div class="split-sub">Cashback · promo recharges</div>
+    </div>
+  </div>
+
+  <!-- Refund / Failure Flow -->
+  <div style="margin-top:14px;margin-bottom:8px"><div class="sec-label lbl-data">Failure &amp; refund handling</div></div>
+  <div class="refund-row">
+    <div class="box"><div class="bt">Payment failure</div><div class="bs">Retry × 3 → fallback to cash</div></div>
+    <div class="box"><div class="bt">Ride cancellation</div><div class="bs">Auto-refund within 5–7 days</div></div>
+    <div class="box"><div class="bt">Dispute resolution</div><div class="bs">Support ticket → manual review</div></div>
+    <div class="box"><div class="bt">Fraud detection</div><div class="bs">Velocity checks · ML scoring</div></div>
+  </div>
+</div>

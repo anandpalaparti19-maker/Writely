@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Earnings | Writely</title>
+    <link rel="stylesheet" href="../../shared/utils/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    <script src="../../shared/utils/logic.js" defer></script>
+    <style>
+        body { background-color: var(--bg-secondary); }
+        .dashboard-layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+        .sidebar { background: white; border-right: 1px solid var(--border); padding: 32px 20px; display: flex; flex-direction: column; gap: 40px; position: sticky; top: 0; height: 100vh; }
+        .sidebar-menu { display: flex; flex-direction: column; gap: 8px; }
+        .menu-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 12px; color: var(--text-secondary); text-decoration: none; font-weight: 500; }
+        .menu-item:hover, .menu-item.active { background: var(--ink-tint); color: var(--ink-purple); }
+        .main-content { padding: 40px; }
+
+        .earnings-card {
+            background: linear-gradient(135deg, var(--flow-teal) 0%, #10B981 100%);
+            padding: 40px;
+            border-radius: 32px;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+            box-shadow: 0 20px 40px rgba(16, 185, 129, 0.2);
+        }
+        .transaction-list { background: white; border-radius: 24px; border: 1px solid var(--border); overflow: hidden; }
+        .transaction-item { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .transaction-item:last-child { border-bottom: none; }
+        .amount-plus { color: #10B981; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <div class="dashboard-layout">
+        <aside class="sidebar">
+            <a href="writer.html" class="logo">
+                <div class="logo-mark" style="background: var(--flow-teal)">W</div>
+                Writely
+            </a>
+            <nav class="sidebar-menu">
+                <a href="writer.html" class="menu-item">Home</a>
+                <a href="browse-jobs.html" class="menu-item">Browse Jobs</a>
+                <a href="submissions.html" class="menu-item">My Submissions</a>
+                <a href="earnings.html" class="menu-item active">Earnings</a>
+            </nav>
+            <div style="margin-top:auto">
+                <a href="account.html" class="menu-item">Account</a>
+                <a href="#" onclick="logout()" class="menu-item" style="color: #EF4444; margin-top: 8px;">
+                    Logout
+                </a>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header style="margin-bottom:40px;">
+                <h1 style="font-size: 32px; font-weight: 800; margin-bottom: 8px;">Earnings</h1>
+                <p style="color: var(--text-secondary);">Manage your payouts and view your financial history.</p>
+            </header>
+
+            <div class="earnings-card">
+                <div>
+                    <div style="font-size: 14px; opacity: 0.9; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; margin-bottom: 8px;">Available for Payout</div>
+                    <div id="walletBalance" style="font-size: 48px; font-weight: 800;">₹0.00</div>
+                </div>
+                <button class="btn" id="withdrawBtn" onclick="withdrawFunds()" style="background: white; color: var(--flow-teal); border: none; padding: 16px 32px; border-radius: 16px; font-weight: 700;">Withdraw Funds</button>
+            </div>
+
+            <h3 style="font-weight: 700; margin-bottom: 24px;">Transaction History</h3>
+            <div class="transaction-list" id="transactionList">
+                <div style="padding: 24px; text-align: center; color: var(--text-secondary);">Loading transactions...</div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        firebase.auth().onAuthStateChanged(async (user) => {
+            if (!user) {
+                window.location.href = 'index.html';
+                return;
+            }
+            loadEarnings(user);
+        });
+
+        async function loadEarnings(user) {
+            try {
+                // Fetch Wallet Balance
+                const walletDoc = await firebase.firestore().collection('wallets').doc(user.uid).get();
+                if (walletDoc.exists) {
+                    document.getElementById('walletBalance').innerText = '₹' + walletDoc.data().balance.toLocaleString();
+                }
+
+                // Fetch Transactions
+                const txSnap = await firebase.firestore().collection('transactions')
+                    .where('receiverId', '==', user.uid)
+                    .get();
+                
+                const list = document.getElementById('transactionList');
+                let transactions = [];
+                txSnap.forEach(doc => transactions.push({ id: doc.id, ...doc.data() }));
+
+                // Sort locally
+                transactions.sort((a, b) => {
+                    const timeA = a.timestamp ? a.timestamp.toMillis() : 0;
+                    const timeB = b.timestamp ? b.timestamp.toMillis() : 0;
+                    return timeB - timeA;
+                });
+
+                if (transactions.length === 0) {
+                    list.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--text-secondary);">No transactions yet.</div>';
+                    return;
+                }
+
+                list.innerHTML = '';
+                transactions.forEach(tx => {
+                    const item = document.createElement('div');
+                    item.className = 'transaction-item';
+                    item.innerHTML = `
+                        <div>
+                            <div style="font-weight: 700;">Payout for Assignment</div>
+                            <div style="font-size: 12px; color: var(--text-tertiary);">Reference: #${tx.id.substring(0, 8)}</div>
+                        </div>
+                        <div class="amount-plus">+₹${tx.amount.toLocaleString()}</div>
+                    `;
+                    list.appendChild(item);
+                });
+
+            } catch (err) {
+                console.error("Earnings Error:", err);
+                document.getElementById('transactionList').innerHTML = '<div style="padding: 24px; text-align: center; color: #EF4444;">Failed to load earnings data.</div>';
+            }
+        }
+
+        async function withdrawFunds() {
+            const user = firebase.auth().currentUser;
+            if (!user) return;
+
+            if(!confirm("Are you sure you want to withdraw your entire balance?")) return;
+
+            const btn = document.getElementById('withdrawBtn');
+            btn.innerText = 'Processing...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch(`${Writely.API_URL}/wallets/${user.uid}/withdraw`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || "Withdrawal failed");
+
+                alert('Withdrawal processed successfully! Funds will reflect in your bank shortly.');
+                loadEarnings(user); // Reload UI
+
+            } catch (err) {
+                alert(err.message || 'Withdrawal failed. Try again.');
+                console.error(err);
+            } finally {
+                btn.innerText = 'Withdraw Funds';
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

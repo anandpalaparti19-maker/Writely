@@ -1,0 +1,116 @@
+{
+  "_README": "This is the complete NoSQL schema for Writely's Firestore database.",
+  "collections": {
+    "users": {
+      "user_id_123": {
+        "uid": "user_id_123",
+        "email": "alex@example.com",
+        "displayName": "Alex Dhanush",
+        "role": "SEEKER",
+        "university": "Delhi University",
+        "phone": "+91 98765 43210",
+        "avatarUrl": "https://storage.googleapis.com/.../avatar.jpg",
+        "bio": "I am a postgraduate student...",
+        "metrics": {
+          "totalSpent": 1250,
+          "activeOrders": 2
+        },
+        "createdAt": "2026-04-29T10:00:00Z"
+      },
+      "writer_id_456": {
+        "uid": "writer_id_456",
+        "email": "expert@writely.com",
+        "displayName": "Dr. Smith",
+        "role": "WRITER",
+        "expertise": ["Economics", "Advanced Mathematics"],
+        "isVerified": true,
+        "razorpayAccountId": "acc_123...", 
+        "metrics": {
+          "totalEarned": 5000,
+          "completedJobs": 42,
+          "rating": 4.8
+        },
+        "createdAt": "2026-01-15T08:30:00Z"
+      }
+    },
+    
+    "assignments": {
+      "assignment_id_789": {
+        "id": "assignment_id_789",
+        "seekerId": "user_id_123",
+        "title": "Macroeconomics Research Paper",
+        "description": "Need a 10-page paper analyzing inflation trends...",
+        "budget": 250,
+        "deadline": "2026-05-15T23:59:59Z",
+        "status": "BIDDING",
+        "attachments": [
+          {
+            "filename": "rubric.pdf",
+            "url": "https://storage.googleapis.com/.../rubric.pdf",
+            "sizeBytes": 102400
+          }
+        ],
+        "activeWriterId": null,
+        "createdAt": "2026-04-29T10:05:00Z",
+        "updatedAt": "2026-04-29T10:05:00Z"
+      }
+    },
+
+    "bids": {
+      "bid_id_001": {
+        "assignmentId": "assignment_id_789",
+        "writerId": "writer_id_456",
+        "amount": 230,
+        "deliveryTime": "2026-05-10T12:00:00Z",
+        "proposal": "I hold a PhD in Economics and can deliver this early...",
+        "status": "PENDING",
+        "createdAt": "2026-04-29T11:00:00Z"
+      }
+    },
+
+    "messages": {
+      "message_id_abc": {
+        "assignmentId": "assignment_id_789",
+        "senderId": "writer_id_456",
+        "receiverId": "user_id_123",
+        "text": "Hello! I saw your assignment. Can you clarify point 3?",
+        "isSystemMessage": false,
+        "read": false,
+        "createdAt": "2026-04-29T11:05:00Z"
+      }
+    },
+
+    "deliverables": {
+      "deliverable_id_xyz": {
+        "assignmentId": "assignment_id_789",
+        "writerId": "writer_id_456",
+        "notes": "Here is the final draft. Let me know if you need revisions.",
+        "files": [
+          {
+            "filename": "Final_Paper_Draft.docx",
+            "url": "https://storage.googleapis.com/.../draft.docx",
+            "sizeBytes": 1500000
+          }
+        ],
+        "turnitinScore": 4, 
+        "aiDetectionScore": 2, 
+        "status": "SUBMITTED",
+        "createdAt": "2026-05-09T18:00:00Z"
+      }
+    },
+
+    "transactions": {
+      "transaction_id_111": {
+        "assignmentId": "assignment_id_789",
+        "seekerId": "user_id_123",
+        "writerId": "writer_id_456",
+        "type": "ESCROW_LOCK",
+        "amount": 250,
+        "platformFee": 37.5, 
+        "writerPayout": 212.5,
+        "status": "COMPLETED",
+        "createdAt": "2026-04-30T09:00:00Z"
+      }
+    }
+  }
+}

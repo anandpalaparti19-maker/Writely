@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | Writely India</title>
+    <link rel="stylesheet" href="../../shared/utils/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+    <script src="../../shared/utils/logic.js" defer></script>
+    <style>
+        body {
+            background: linear-gradient(rgba(127, 119, 221, 0.05), rgba(29, 158, 117, 0.05)), url('https://images.unsplash.com/photo-1497215728101-856f4ea42174?q=80&w=2070&auto=format&fit=crop');
+            background-size: cover;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 48px;
+            border-radius: 32px;
+            width: 100%;
+            max-width: 440px;
+            box-shadow: 0 24px 64px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .input-group { text-align: left; margin-bottom: 24px; }
+        .input-group label { display: block; font-size: 12px; font-weight: 700; color: var(--text-tertiary); margin-bottom: 8px; text-transform: uppercase; }
+        .input-group input {
+            width: 100%;
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            font-size: 15px;
+        }
+        .input-group input:focus { border-color: var(--ink-purple); outline: none; box-shadow: 0 0 0 4px var(--ink-tint); }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <a href="index.html" class="logo" style="display:inline-flex; margin-bottom:32px;">
+            <div class="logo-mark">W</div>
+            Writely
+        </a>
+        <h2 style="margin-bottom:8px; font-weight:800;">Welcome back</h2>
+        <p style="color:var(--text-secondary); font-size:14px; margin-bottom:32px;">Enter your credentials to access your dashboard.</p>
+        
+        <form onsubmit="Writely.loginUser(event)">
+            <div class="input-group">
+                <label>Email Address</label>
+                <input type="email" id="email" placeholder="name@example.com" required>
+            </div>
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="password" placeholder="••••••••" required>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%; padding:18px;">Sign In</button>
+        </form>
+        
+        <p style="margin-top:24px; font-size:14px; color:var(--text-secondary);">
+            Don't have an account? <a href="register.html" style="color:var(--ink-purple); font-weight:600; text-decoration:none;">Sign up</a>
+        </p>
+    </div>
+</body>
+</html>

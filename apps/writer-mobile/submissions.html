@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Submissions | Writely</title>
+    <link rel="stylesheet" href="../../shared/utils/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    <script src="../../shared/utils/logic.js" defer></script>
+    <style>
+        body { background-color: var(--bg-secondary); }
+        .dashboard-layout {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            min-height: 100vh;
+        }
+        .sidebar {
+            background: white;
+            border-right: 1px solid var(--border);
+            padding: 32px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 40px;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+        }
+        .sidebar-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .menu-item:hover, .menu-item.active {
+            background: var(--ink-tint);
+            color: var(--ink-purple);
+        }
+        .main-content { padding: 40px; }
+
+        .submission-card {
+            background: white;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            padding: 24px;
+            margin-bottom: 16px;
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            align-items: center;
+            gap: 24px;
+        }
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .status-bidding { background: #E0F2FE; color: #0369A1; }
+        .status-active { background: #DCFCE7; color: #166534; }
+        .status-review { background: #FEF9C3; color: #854D0E; }
+    </style>
+</head>
+<body>
+    <div class="dashboard-layout">
+        <aside class="sidebar">
+            <a href="writer.html" class="logo">
+                <div class="logo-mark">
+                    <svg width="18" height="18" viewBox="0 0 42 42" fill="none">
+                        <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                        <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                        <circle cx="30" cy="12" r="3" fill="#9FE1CB"/>
+                    </svg>
+                </div>
+                Writely
+            </a>
+            <nav class="sidebar-menu">
+                <a href="writer.html" class="menu-item">Home</a>
+                <a href="browse-jobs.html" class="menu-item">Browse Jobs</a>
+                <a href="submissions.html" class="menu-item active">My Submissions</a>
+                <a href="earnings.html" class="menu-item">Earnings</a>
+            </nav>
+            <div style="margin-top:auto">
+                <a href="account.html" class="menu-item">Account</a>
+                <a href="#" onclick="logout()" class="menu-item" style="color: #EF4444; margin-top: 8px;">
+                    Logout
+                </a>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header style="margin-bottom:40px;">
+                <h1 style="font-size: 32px; font-weight: 800; margin-bottom: 8px;">My Submissions</h1>
+                <p style="color: var(--text-secondary);">Track your active proposals and delivered work.</p>
+            </header>
+
+            <div id="submissionList">
+                <div style="text-align:center; padding:40px; color:var(--text-secondary);">Loading your submissions...</div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        firebase.auth().onAuthStateChanged(async (user) => {
+            if (!user) {
+                window.location.href = 'index.html';
+                return;
+            }
+            loadSubmissions(user);
+        });
+
+        async function loadSubmissions(user) {
+            const container = document.getElementById('submissionList');
+            try {
+                // Fetch all assignments to filter bids and active projects locally
+                const snapshot = await firebase.firestore().collection('assignments').orderBy('createdAt', 'desc').get();
+                const allAssignments = [];
+                snapshot.forEach(doc => allAssignments.push({ id: doc.id, ...doc.data() }));
+
+                // Filter where user is the active writer OR user has placed a bid
+                const mySubmissions = allAssignments.filter(job => {
+                    const isMyProject = job.activeWriterId === user.uid;
+                    const hasMyBid = job.bids && job.bids.some(bid => bid.writerId === user.uid);
+                    return isMyProject || hasMyBid;
+                });
+
+                if (mySubmissions.length === 0) {
+                    container.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-secondary);">You haven't submitted any proposals yet. Check the Browse Jobs tab!</div>`;
+                    return;
+                }
+
+                container.innerHTML = '';
+                mySubmissions.forEach(job => {
+                    const isAssignedToMe = job.activeWriterId === user.uid;
+                    let displayStatus = 'Proposal Sent';
+                    let badgeClass = 'status-bidding';
+                    
+                    if (isAssignedToMe) {
+                        if (job.status === 'ACTIVE') {
+                            displayStatus = 'Active Work';
+                            badgeClass = 'status-active';
+                        } else if (job.status === 'COMPLETED') {
+                            displayStatus = 'Completed';
+                            badgeClass = 'status-active';
+                        }
+                    }
+
+                    const card = document.createElement('div');
+                    card.className = 'submission-card';
+                    card.innerHTML = `
+                        <div>
+                            <h3 style="font-weight: 700; margin-bottom: 4px;">${job.title}</h3>
+                            <p style="font-size: 13px; color: var(--text-secondary);">Budget: ₹${job.budget.toLocaleString()}</p>
+                        </div>
+                        <div class="status-badge ${badgeClass}">${displayStatus}</div>
+                        <div><button class="btn ${isAssignedToMe ? 'btn-primary' : 'btn-secondary'}" style="padding:8px 16px; font-size:13px;" ${job.status === 'COMPLETED' ? 'disabled' : ''}>
+                            ${job.status === 'COMPLETED' ? 'Paid' : (isAssignedToMe ? 'Deliver Work' : 'View Bid')}
+                        </button></div>
+                    `;
+                    container.appendChild(card);
+                });
+
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = `<div style="text-align:center; padding:40px; color:#EF4444;">Failed to load submissions.</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

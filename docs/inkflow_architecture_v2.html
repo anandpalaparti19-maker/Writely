@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Writely — System Architecture & Payments</title>
+    <style>
+        :root {
+            --color-background-primary: #ffffff;
+            --color-background-secondary: #f9fafb;
+            --color-background-info: #eff6ff;
+            --color-background-warning: #fffbeb;
+            --color-background-success: #ecfdf5;
+            --color-background-danger: #fef2f2;
+            --color-border-primary: #e5e7eb;
+            --color-border-secondary: #f3f4f6;
+            --color-border-tertiary: #f9fafb;
+            --color-border-info: #3b82f6;
+            --color-border-warning: #f59e0b;
+            --color-border-success: #10b981;
+            --color-border-danger: #ef4444;
+            --color-text-primary: #111827;
+            --color-text-secondary: #4b5563;
+            --color-text-tertiary: #9ca3af;
+            --color-text-info: #1d4ed8;
+            --color-text-warning: #b45309;
+            --color-text-success: #047857;
+            --color-text-danger: #b91c1c;
+            --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+
+        body { font-family: var(--font-sans); margin: 0; padding: 2rem; background: #f3f4f6; color: var(--color-text-primary); }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 40px; border-radius: 24px; box-shadow: 0 4px 24px rgba(0,0,0,0.05); }
+
+        .ra{font-family:var(--font-sans);padding:1rem 0}
+        .ra .sec{margin-bottom:14px}
+        .ra .sec-label{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px;padding:4px 10px;border-radius:6px;display:inline-block}
+        .ra .row{display:flex;gap:8px}
+        .ra .row+.row{margin-top:8px}
+        .ra .box{flex:1;padding:12px 16px;border-radius:10px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);min-width:0;cursor:pointer;transition:all 0.2s}
+        .ra .box:hover{border-color: var(--color-text-tertiary); transform: translateY(-1px); }
+        .ra .box.wide{flex:2}
+        .ra .bt{font-size:13px;font-weight:600;color:var(--color-text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .ra .bs{font-size:11px;color:var(--color-text-secondary);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .ra .layer{border-left:4px solid transparent;padding-left:14px}
+        
+        .ra .layer-client{border-left-color:var(--color-border-info)}
+        .ra .layer-svc{border-left-color:var(--color-border-warning)}
+        .ra .layer-pay{border-left-color:var(--color-border-success)}
+        .ra .layer-data{border-left-color:var(--color-border-danger)}
+        
+        .ra .lbl-client{background:var(--color-background-info);color:var(--color-text-info)}
+        .ra .lbl-gw{background:var(--color-background-secondary);color:var(--color-text-secondary)}
+        .ra .lbl-svc{background:var(--color-background-warning);color:var(--color-text-warning)}
+        .ra .lbl-pay{background:var(--color-background-success);color:var(--color-text-success)}
+        .ra .lbl-evt{background:var(--color-background-warning);color:var(--color-text-warning)}
+        .ra .lbl-data{background:var(--color-background-danger);color:var(--color-text-danger)}
+        .ra .lbl-ext{background:var(--color-background-secondary);color:var(--color-text-secondary)}
+        
+        .ra .conn{text-align:center;font-size:11px;color:var(--color-text-tertiary);margin:10px 0;letter-spacing:2px;font-weight:700;}
+        .ra .divider{border:none;border-top:1px solid var(--color-border-primary);margin:32px 0}
+        .ra .section-title{font-size:18px;font-weight:700;color:var(--color-text-primary);margin-bottom:20px;display:flex;align-items:center;gap:10px;}
+        .ra .section-title span { color: var(--color-text-tertiary); font-weight: 400; font-size: 14px; }
+
+        .ra .pflow{display:flex;align-items:stretch;gap:0;margin-bottom:24px;overflow-x:auto;padding-bottom:10px;}
+        .ra .pf-step{display:flex;flex-direction:column;align-items:center;flex:1;min-width:100px}
+        .ra .pf-num{font-size:10px;font-weight:700;color:var(--color-text-tertiary);margin-bottom:6px}
+        .ra .pf-box{padding:10px 8px;border-radius:10px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);text-align:center;width:100%;box-sizing:border-box}
+        .ra .pf-lbl{font-size:13px;font-weight:600;color:var(--color-text-primary)}
+        .ra .pf-sub{font-size:10px;color:var(--color-text-secondary);margin-top:4px}
+        .ra .pf-arr{display:flex;align-items:center;padding:0 8px;color:var(--color-text-tertiary);font-size:16px;padding-top:24px;flex-shrink:0}
+
+        .ra .tag-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:24px}
+        .ra .tag{padding:6px 14px;border-radius:24px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);font-size:12px;font-weight:600;color:var(--color-text-secondary)}
+        
+        .ra .split-row{display:flex;gap:12px}
+        .ra .split-box{flex:1;padding:20px;border-radius:12px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary)}
+        .ra .split-pct{font-size:28px;font-weight:800;color:var(--color-text-primary)}
+        .ra .split-lbl{font-size:14px;font-weight:700;color:var(--color-text-primary);margin-top:4px}
+        .ra .split-sub{font-size:11px;color:var(--color-text-secondary);margin-top:6px;line-height:1.4;}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="ra">
+        <div class="section-title">Writely — System Architecture &amp; Payments <span>Blueprint v2.0</span></div>
+
+        <!-- 1. CLIENT -->
+        <div class="sec layer layer-client">
+            <div class="sec-label lbl-client">Tier 1: Client Layer</div>
+            <div class="row">
+                <div class="box"><div class="bt">Seeker Dashboard</div><div class="bs">Web · Order Management</div></div>
+                <div class="box"><div class="bt">Writer Mobile</div><div class="bs">Android · iOS · Job Feed</div></div>
+                <div class="box"><div class="bt">Admin Operations</div><div class="bs">Web · Moderation · Ops</div></div>
+            </div>
+        </div>
+
+        <div class="conn">↕ HTTPS · WebSockets</div>
+
+        <!-- 2. GATEWAY -->
+        <div class="sec">
+            <div class="sec-label lbl-gw">Tier 2: Gateway Layer</div>
+            <div class="row">
+                <div class="box"><div class="bt">Nginx Edge</div><div class="bs">SSL Termination · Static Assets</div></div>
+                <div class="box"><div class="bt">API Gateway</div><div class="bs">JWT Auth · Rate Limit · Routing</div></div>
+                <div class="box"><div class="bt">Load Balancer</div><div class="bs">AWS ALB · Round-Robin</div></div>
+            </div>
+        </div>
+
+        <div class="conn">↕ Internal gRPC / RPC</div>
+
+        <!-- 3. CORE SERVICES -->
+        <div class="sec layer layer-svc">
+            <div class="sec-label lbl-svc">Tier 3: Core Microservices</div>
+            <div class="row">
+                <div class="box"><div class="bt">Auth Service</div><div class="bs">Identity · Session · OAuth2</div></div>
+                <div class="box"><div class="bt">User Service</div><div class="bs">Expertise · Rating · Profiles</div></div>
+                <div class="box"><div class="bt">Assignment Service</div><div class="bs">Order Lifecycle · State Machine</div></div>
+            </div>
+            <div class="row">
+                <div class="box"><div class="bt">Matching Engine</div><div class="bs">Bid Sorting · Expert Dispatch</div></div>
+                <div class="box"><div class="bt">Review Service</div><div class="bs">Plagiarism · AI Detection</div></div>
+                <div class="box"><div class="bt">Notification Hub</div><div class="bs">Firebase · SMS · Push Alerts</div></div>
+            </div>
+        </div>
+
+        <div class="conn">↕ Event Stream (Async)</div>
+
+        <!-- 4. PAYMENT SERVICES -->
+        <div class="sec layer layer-pay">
+            <div class="sec-label lbl-pay">Tier 4: Payment &amp; Escrow</div>
+            <div class="row">
+                <div class="box"><div class="bt">Escrow Service</div><div class="bs">Fund Locking · Release Trigger</div></div>
+                <div class="box"><div class="bt">Wallet Service</div><div class="bs">Credits · Bonus · Internal Ledger</div></div>
+                <div class="box"><div class="bt">Pricing Engine</div><div class="bs">Dynamic Commission · Fees</div></div>
+                <div class="box"><div class="bt">Settlement Hub</div><div class="bs">Stripe Payouts · Bank Transfers</div></div>
+            </div>
+        </div>
+
+        <div class="conn">↕ Kafka Pub/Sub</div>
+
+        <!-- 5. EVENT BUS -->
+        <div class="sec">
+            <div class="sec-label lbl-evt">Tier 5: Messaging Bus</div>
+            <div class="row">
+                <div class="box wide"><div class="bt">Kafka Clusters</div><div class="bs">order.posted · bid.placed · escrow.locked · work.submitted · payment.released</div></div>
+                <div class="box"><div class="bt">Redis Streams</div><div class="bs">Real-time Chat · Live GPS</div></div>
+            </div>
+        </div>
+
+        <div class="conn">↕ Persistence I/O</div>
+
+        <!-- 6. DATA LAYER -->
+        <div class="sec layer layer-data">
+            <div class="sec-label lbl-data">Tier 6: Persistence Layer</div>
+            <div class="row">
+                <div class="box"><div class="bt">MongoDB Atlas</div><div class="bs">Assignments · Users · Documents</div></div>
+                <div class="box"><div class="bt">Redis Cloud</div><div class="bs">Cache · Session · Rate Limits</div></div>
+                <div class="box"><div class="bt">AWS S3</div><div class="bs">PDFs · Drafts · Academic Files</div></div>
+                <div class="box"><div class="bt">Elasticsearch</div><div class="bs">Search · Log Analytics</div></div>
+            </div>
+        </div>
+
+        <div class="conn">↕ External Integrations</div>
+
+        <!-- 7. EXTERNAL -->
+        <div class="sec">
+            <div class="sec-label lbl-ext">Tier 7: External APIs</div>
+            <div class="row">
+                <div class="box"><div class="bt">Stripe API</div><div class="bs">Payments · Payouts · Connect</div></div>
+                <div class="box"><div class="bt">Turnitin API</div><div class="bs">Plagiarism Certification</div></div>
+                <div class="box"><div class="bt">Firebase Cloud</div><div class="bs">Auth · Storage · Notifications</div></div>
+            </div>
+        </div>
+
+        <hr class="divider">
+
+        <!-- PAYMENT FLOW -->
+        <div class="section-title">Writely Payment Lifecycle <span>Escrow-to-Release</span></div>
+
+        <div class="pflow">
+            <div class="pf-step"><div class="pf-num">01</div><div class="pf-box"><div class="pf-lbl">Order Posted</div><div class="pf-sub">Funds Locked (Escrow)</div></div></div>
+            <div class="pf-arr">›</div>
+            <div class="pf-step"><div class="pf-num">02</div><div class="pf-box"><div class="pf-lbl">Work Sent</div><div class="pf-sub">Writer Uploads File</div></div></div>
+            <div class="pf-arr">›</div>
+            <div class="pf-step"><div class="pf-num">03</div><div class="pf-box"><div class="pf-lbl">Review Scan</div><div class="pf-sub">Turnitin &amp; AI Check</div></div></div>
+            <div class="pf-arr">›</div>
+            <div class="pf-step"><div class="pf-num">04</div><div class="pf-box"><div class="pf-lbl">Approval</div><div class="pf-sub">Seeker Confirms Quality</div></div></div>
+            <div class="pf-arr">›</div>
+            <div class="pf-step"><div class="pf-num">05</div><div class="pf-box"><div class="pf-lbl">Release</div><div class="pf-sub">Funds Move to Wallet</div></div></div>
+            <div class="pf-arr">›</div>
+            <div class="pf-step"><div class="pf-num">06</div><div class="pf-box"><div class="pf-lbl">Payout</div><div class="pf-sub">Stripe Connect Transfer</div></div></div>
+        </div>
+
+        <!-- Revenue Split -->
+        <div style="margin-bottom:12px"><div class="sec-label lbl-pay">Platform Revenue Split</div></div>
+        <div class="split-row">
+            <div class="split-box">
+                <div class="split-pct">15%</div>
+                <div class="split-lbl">Service Commission</div>
+                <div class="split-sub">Platform Ops · Tech · Support · Verification</div>
+            </div>
+            <div class="split-box">
+                <div class="split-pct">85%</div>
+                <div class="split-lbl">Writer Payout</div>
+                <div class="split-sub">Direct Transfer to Expert Bank Account</div>
+            </div>
+            <div class="split-box">
+                <div class="split-pct">₹249</div>
+                <div class="split-lbl">Service Fee</div>
+                <div class="split-sub">Fixed processing fee per transaction (INR)</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

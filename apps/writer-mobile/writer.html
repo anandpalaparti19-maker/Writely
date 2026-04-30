@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Writer Dashboard | Writely</title>
+    <link rel="stylesheet" href="../../shared/utils/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    <script src="../../shared/utils/logic.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <style>
+        body { background-color: var(--bg-secondary); }
+        .dashboard-layout {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            min-height: 100vh;
+        }
+        .sidebar {
+            background: white;
+            border-right: 1px solid var(--border);
+            padding: 32px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 40px;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+        }
+        .sidebar-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .menu-item:hover, .menu-item.active {
+            background: var(--ink-tint);
+            color: var(--ink-purple);
+        }
+        .main-content {
+            padding: 40px;
+            overflow-y: auto;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+        .stat-card {
+            background: white;
+            padding: 24px;
+            border-radius: 20px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border);
+        }
+        .stat-val { font-size: 32px; font-weight: 800; color: var(--text-primary); margin: 8px 0; }
+        .stat-lbl { font-size: 13px; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+
+        .job-card {
+            background: white;
+            padding: 24px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            margin-bottom: 16px;
+            transition: all 0.2s;
+        }
+        .job-card:hover {
+            border-color: var(--flow-teal);
+            box-shadow: var(--shadow-md);
+        }
+        .job-header { display: flex; justify-content: space-between; margin-bottom: 12px; }
+        .job-price { font-size: 20px; font-weight: 800; color: var(--flow-teal); }
+        .job-tags { display: flex; gap: 8px; margin-top: 16px; }
+        .job-tag {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 6px;
+            background: #F3F4F6;
+            color: var(--text-secondary);
+        }
+        
+        .active-project {
+            background: var(--ink-black);
+            color: white;
+            padding: 24px;
+            border-radius: 24px;
+            margin-bottom: 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard-layout">
+        <aside class="sidebar">
+            <a href="index.html" class="logo">
+                <div class="logo-mark" style="background: var(--flow-teal)">
+                    <svg width="18" height="18" viewBox="0 0 42 42" fill="none">
+                        <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                        <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                        <circle cx="30" cy="12" r="3" fill="#9FE1CB"/>
+                    </svg>
+                </div>
+                Writely
+            </a>
+            
+            <nav class="sidebar-menu">
+                <a href="writer.html" class="menu-item active">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                    Home
+                </a>
+                <a href="browse-jobs.html" class="menu-item">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    Browse Jobs
+                </a>
+                <a href="submissions.html" class="menu-item">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    My Submissions
+                </a>
+                <a href="earnings.html" class="menu-item">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                    Earnings
+                </a>
+            </nav>
+            
+            <div style="margin-top:auto">
+                <div style="background: var(--bg-secondary); padding: 16px; border-radius: 16px; margin-bottom: 16px;">
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Writer Level</div>
+                    <div style="font-weight: 700; color: var(--ink-purple);">Elite Expert</div>
+                </div>
+                <a href="account.html" class="menu-item">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    Account
+                </a>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <!-- SUBMIT SOLUTION MODAL -->
+            <div id="submitModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(10px); z-index:1000; align-items:center; justify-content:center;">
+                <div style="background:white; padding:40px; border-radius:32px; width:100%; max-width:500px; box-shadow:0 32px 64px rgba(0,0,0,0.2);">
+                    <h2 style="font-weight:800; margin-bottom:8px;">Deliver Work</h2>
+                    <p style="color:var(--text-secondary); font-size:14px; margin-bottom:32px;">Upload your final document for seeker review.</p>
+                    
+                    <form id="submitForm" onsubmit="handleDelivery(event)">
+                        <input type="hidden" name="assignmentId" id="submitAssignmentId">
+                        <input type="hidden" name="deliveryMethod" id="submitDeliveryMethod">
+                        
+                        <div style="margin-bottom:20px;">
+                            <label style="display:block; font-size:12px; font-weight:700; color:var(--text-tertiary); margin-bottom:8px; text-transform:uppercase;">Delivery Notes</label>
+                            <textarea name="notes" placeholder="Any final comments for the seeker..." style="width:100%; padding:14px; border-radius:12px; border:1px solid var(--border);" required></textarea>
+                        </div>
+                        
+                        <div id="digitalUploadSection" style="margin-bottom:20px;">
+                            <label style="display:block; font-size:12px; font-weight:700; color:var(--text-tertiary); margin-bottom:8px; text-transform:uppercase;">Final Document</label>
+                            <input type="file" id="solutionInput" name="solution" style="width:100%; font-size:12px;">
+                        </div>
+
+                        <div id="physicalTrackingSection" style="margin-bottom:20px; display:none;">
+                            <label style="display:block; font-size:12px; font-weight:700; color:var(--text-tertiary); margin-bottom:8px; text-transform:uppercase;">Courier Tracking Link / Details</label>
+                            <input type="text" id="trackingInput" name="tracking" placeholder="e.g. DTDC Tracking ID 123456" style="width:100%; padding:14px; border-radius:12px; border:1px solid var(--border);">
+                        </div>
+
+                        <div style="display:flex; gap:12px; margin-top:32px;">
+                            <button type="button" onclick="closeSubmitModal()" class="btn btn-secondary" style="flex:1;">Cancel</button>
+                            <button type="submit" id="deliverBtn" class="btn btn-primary" style="flex:2;">Deliver Now</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <header class="dashboard-header">
+                <div>
+                    <h1 style="font-weight: 800; font-size: 24px;">Expert Workspace</h1>
+                    <p style="color: var(--text-secondary); font-size: 13px;">Find new opportunities or manage your active jobs.</p>
+                </div>
+                <div style="display: flex; gap: 12px;">
+                    <div class="pill">Level 4 Expert</div>
+                </div>
+            </header>
+
+            <!-- ACTIVE PROJECTS (NEW) -->
+            <section id="activeProjectsSection" style="margin-bottom:40px; display:none;">
+                <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 20px;">Ongoing Deliveries</h3>
+                <div id="activeList"></div>
+            </section>
+
+            <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:32px;">
+                <div>
+                    <h2 id="writerNameDisplay" style="font-size: 28px; font-weight: 800; letter-spacing: -0.02em;">Welcome back</h2>
+                    <p style="color: var(--text-secondary);">Your current writing standing and opportunities.</p>
+                </div>
+                <div style="display:flex; gap:12px;">
+                    <button class="btn btn-secondary">Availability: ON</button>
+                    <button class="btn btn-primary" style="background: var(--flow-teal); box-shadow: 0 4px 14px rgba(29, 158, 117, 0.3)">
+                        Withdraw <span id="walletBalanceDisplay">₹0</span>
+                    </button>
+                </div>
+            </header>
+
+            <div id="noActiveProject" style="background: white; padding: 40px; border-radius: 24px; border: 1px solid var(--border); text-align: center; margin-bottom: 40px;">
+                <p style="color: var(--text-secondary);">No active assignments. Browse the feed to find work!</p>
+            </div>
+
+            <!-- WRITER ZERO-FEE BANNER -->
+            <div id="writerSubBanner" style="display:none; background: linear-gradient(135deg, #10B981, #059669); padding: 20px; border-radius: 20px; color: white; margin-bottom: 32px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <h3 style="font-size: 18px; font-weight: 800; margin-bottom: 4px;">💎 Zero-Fee Pass Active</h3>
+                        <p id="writerSubExpiry" style="font-size: 13px; opacity: 0.9;">You get 100% payout for the next 24 hours.</p>
+                    </div>
+                    <div style="font-size: 24px;">🚀</div>
+                </div>
+            </div>
+
+            <div id="noWriterSubBanner" style="background: white; padding: 20px; border-radius: 20px; border: 1px solid var(--border); margin-bottom: 32px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 4px;">Activate Zero-Fee Pass</h3>
+                    <p style="color: var(--text-secondary); font-size: 13px;">Keep 100% of your earnings for 24 hours.</p>
+                </div>
+                <button onclick="handleBuyWriterPass()" class="btn btn-primary" style="background: #10B981; border:none; padding: 10px 20px;">Get for ₹30</button>
+            </div>
+
+            <section class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-lbl">Wallet Balance</div>
+                    <div id="statWalletBalance" class="stat-val">₹0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-lbl">Project Rating</div>
+                    <div id="statRating" class="stat-val">0.0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-lbl">Completed</div>
+                    <div id="statCompletedJobs" class="stat-val">00</div>
+                </div>
+            </section>
+
+            <section>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+                    <h3 style="font-size: 20px; font-weight: 700;">Recommended for You</h3>
+                    <div style="display:flex; gap:12px;">
+                        <span style="font-size: 14px; color: var(--text-secondary);">Filters: Economics, Finance</span>
+                    </div>
+                </div>
+
+                <div id="jobFeed" style="display: flex; flex-direction: column; gap: 20px;">
+                    <div style="text-align:center; padding:40px; color:var(--text-secondary);">
+                        Searching for active opportunities...
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        let lastJobCount = -1;
+        const notificationSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+
+        async function loadLiveJobs() {
+            const container = document.getElementById('jobFeed');
+            
+            // Real-time listener for jobs
+            firebase.firestore().collection('assignments')
+                .where('status', '==', 'POSTED')
+                .onSnapshot(snapshot => {
+                    const jobs = [];
+                    snapshot.forEach(doc => jobs.push({ id: doc.id, ...doc.data() }));
+                    
+                    // Sort by createdAt desc in memory (avoids index requirement)
+                    jobs.sort((a, b) => {
+                        const dateA = a.createdAt ? a.createdAt.toMillis() : 0;
+                        const dateB = b.createdAt ? b.createdAt.toMillis() : 0;
+                        return dateB - dateA;
+                    });
+
+                    // Notification logic
+                    if (lastJobCount !== -1 && jobs.length > lastJobCount) {
+                        notificationSound.play().catch(e => console.log("Audio blocked"));
+                    }
+                    lastJobCount = jobs.length;
+
+                    if (jobs.length > 0) {
+                        container.innerHTML = jobs.map(job => {
+                            const payout = job.budget - 15;
+                            let upsellTags = '';
+                            if (job.pages <= 20 && job.description?.toLowerCase().includes('urgent')) upsellTags += '<span class="job-tag" style="background: #FEE2E2; color: #EF4444;">⚡ 24H Delivery</span>';
+                            if (job.deliveryMethod === 'Physical') upsellTags += '<span class="job-tag" style="background: #E0F2FE; color: #0369A1;">📦 Physical</span>';
+                            
+                            let attachmentsHtml = '';
+                            if (job.attachments && job.attachments.length > 0) {
+                                attachmentsHtml = `<div style="margin: 12px 0; display:flex; gap:8px; flex-wrap:wrap;">`;
+                                job.attachments.forEach(att => {
+                                    attachmentsHtml += `<a href="${att.url}" target="_blank" style="font-size:12px; background:var(--bg-secondary); padding:4px 8px; border-radius:6px; color:var(--ink-purple); text-decoration:none;">📎 ${att.filename}</a>`;
+                                });
+                                attachmentsHtml += `</div>`;
+                            }
+
+                            return `
+                            <div class="job-card animate-fade-in">
+                                <div class="job-header">
+                                    <div>
+                                        <h4 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">${job.title}</h4>
+                                        <div style="color: var(--text-secondary); font-size: 13px;">${job.pages || 0} Pages • Verified Project</div>
+                                    </div>
+                                    <div class="job-price" style="color: var(--flow-teal);">₹${payout}</div>
+                                </div>
+                                <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.5; margin: 12px 0;">${job.description || 'No description provided.'}</p>
+                                ${attachmentsHtml}
+                                <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                                    <div class="job-tags">
+                                        <span class="job-tag">Academic</span>
+                                        ${upsellTags}
+                                    </div>
+                                    <div style="display: flex; gap: 8px;">
+                                        <button onclick="acceptProject('${job.id}')" class="btn btn-primary" style="background: #10B981; border:none; padding: 8px 16px; font-size: 14px;">Accept & Start</button>
+                                    </div>
+                                </div>
+                            </div>
+                            `;
+                        }).join('');
+                    } else {
+                        container.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-secondary);">No active opportunities found. Check back later!</div>';
+                    }
+                }, err => {
+                    console.error("Live jobs load failed:", err);
+                    container.innerHTML = '<div style="text-align:center; padding:40px; color:#EF4444;">Failed to connect to real-time feed.</div>';
+                });
+        }
+
+        async function initWriterDashboard() {
+            try {
+                const profile = await Writely.getUserProfile();
+                if (profile) {
+                    const name = profile.displayName || profile.fullName || 'User';
+                    document.getElementById('writerNameDisplay').innerText = `Welcome back, ${name.split(' ')[0]}`;
+                    
+                    // Check Zero-Fee Pass
+                    if (profile.writerSubscription && profile.writerSubscription.expiresAt) {
+                        const expiry = profile.writerSubscription.expiresAt.toDate();
+                        if (expiry > new Date()) {
+                            document.getElementById('writerSubBanner').style.display = 'block';
+                            document.getElementById('noWriterSubBanner').style.display = 'none';
+                            const hoursLeft = Math.ceil((expiry - new Date()) / (1000 * 60 * 60));
+                            document.getElementById('writerSubExpiry').innerText = `You get 100% payout for the next ${hoursLeft} hours.`;
+                        }
+                    }
+                    loadWriterDashboardData();
+                } else {
+                    window.location.href = '../seeker-web/login.html';
+                }
+            } catch (err) {
+                console.error("Writer dashboard init failed:", err);
+            }
+        }
+
+        async function loadWriterDashboardData() {
+            const user = firebase.auth().currentUser;
+            if(!user) return;
+
+            try {
+                // Get Wallet
+                const walletSnap = await firebase.firestore().collection('wallets').doc(user.uid).get();
+                if(walletSnap.exists) {
+                    const balance = walletSnap.data().balance || 0;
+                    document.getElementById('walletBalanceDisplay').innerText = `₹${balance.toLocaleString()}`;
+                    document.getElementById('statWalletBalance').innerText = `₹${balance.toLocaleString()}`;
+                }
+
+                // Get Assignments
+                const assignmentsSnap = await firebase.firestore().collection('assignments')
+                    .where('activeWriterId', '==', user.uid)
+                    .get();
+
+                let completed = 0;
+                const activeJobs = [];
+                assignmentsSnap.forEach(doc => {
+                    const data = doc.data();
+                    if(data.status === 'COMPLETED') completed++;
+                    else if(data.status === 'ACTIVE') activeJobs.push({ id: doc.id, ...data });
+                });
+                document.getElementById('statCompletedJobs').innerText = completed.toString().padStart(2, '0');
+                
+                // Populate Active Projects
+                const activeSection = document.getElementById('activeProjectsSection');
+                const activeList = document.getElementById('activeList');
+                const noActive = document.getElementById('noActiveProject');
+                
+                if (activeJobs.length > 0) {
+                    activeSection.style.display = 'block';
+                    noActive.style.display = 'none';
+                    activeList.innerHTML = activeJobs.map(job => `
+                        <div class="job-card" style="border-left: 4px solid var(--ink-purple); margin-bottom:16px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <h4 style="font-size: 16px; font-weight: 700;">${job.title}</h4>
+                                    <div style="font-size: 12px; color: var(--text-secondary); margin-top:4px;">
+                                        ${job.deliveryMethod === 'Physical' ? '📦 Physical Delivery • Address: ' + (job.deliveryAddress || 'Ask seeker') : '📄 Digital PDF Required'}
+                                    </div>
+                                </div>
+                                <button onclick="openSubmitModal('${job.id}', '${job.deliveryMethod}')" class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;">Deliver Work</button>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    activeSection.style.display = 'none';
+                    noActive.style.display = 'block';
+                }
+
+                // Rating (Mock for now or 0.0)
+                document.getElementById('statRating').innerText = "5.0"; 
+
+            } catch (err) { console.error(err); }
+        }
+
+        async function handleBuyWriterPass() {
+            if(confirm("Activate Zero-Fee Pass for ₹30? (Valid for 24 hours)")) {
+                try {
+                    await Writely.buyWriterSubscription();
+                    confetti({
+                        particleCount: 150,
+                        spread: 70,
+                        origin: { y: 0.6 },
+                        colors: ['#10B981', '#059669', '#34D399']
+                    });
+                    setTimeout(() => {
+                        alert("Pass activated! You will now receive 100% of the budget.");
+                        location.reload();
+                    }, 1500);
+                } catch (err) { alert(err.message); }
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initWriterDashboard();
+            loadLiveJobs();
+            firebase.auth().onAuthStateChanged(user => {
+                if (user) Writely.initNotifications(user.uid);
+            });
+        });
+
+        function openSubmitModal(id, deliveryMethod) {
+            document.getElementById('submitAssignmentId').value = id;
+            document.getElementById('submitDeliveryMethod').value = deliveryMethod;
+            
+            const digitalSection = document.getElementById('digitalUploadSection');
+            const physicalSection = document.getElementById('physicalTrackingSection');
+            const solutionInput = document.getElementById('solutionInput');
+            const trackingInput = document.getElementById('trackingInput');
+
+            if (deliveryMethod === 'Physical') {
+                digitalSection.style.display = 'none';
+                solutionInput.required = false;
+                physicalSection.style.display = 'block';
+                trackingInput.required = true;
+            } else {
+                digitalSection.style.display = 'block';
+                solutionInput.required = true;
+                physicalSection.style.display = 'none';
+                trackingInput.required = false;
+            }
+
+            document.getElementById('submitModal').style.display = 'flex';
+        }
+        function closeSubmitModal() { document.getElementById('submitModal').style.display = 'none'; }
+        
+        async function handleDelivery(event) {
+            event.preventDefault();
+            const form = event.target;
+            const id = document.getElementById('submitAssignmentId').value;
+            const method = document.getElementById('submitDeliveryMethod').value;
+            const formData = new FormData(form);
+
+            const btn = document.getElementById('deliverBtn');
+            btn.innerText = 'Delivering...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch(`http://localhost:5001/api/assignments/${id}/submit`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if(response.ok) {
+                    alert(method === 'Physical' ? 'Dispatched! Tracking info sent to seeker.' : 'Work Delivered! Pending Seeker Review.');
+                    location.reload();
+                } else {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Delivery failed');
+                }
+            } catch (err) {
+                console.error(err);
+                alert(err.message);
+            } finally {
+                btn.innerText = 'Deliver Now';
+                btn.disabled = false;
+            }
+        }
+        async function acceptProject(assignmentId) {
+            if(!confirm("Accept this project and start writing?")) return;
+            try {
+                const user = firebase.auth().currentUser;
+                // This will set the status to ACTIVE and send the auto-message
+                const result = await Writely.assignWriter(assignmentId, user.uid);
+                if(result.message) {
+                    alert("Project Started! Message sent: 'I am started writing'");
+                    location.reload();
+                }
+            } catch (err) { alert(err.message); }
+        }
+    </script>
+    <!-- AI Support Chatbot -->
+    <div id="aiSupport" onclick="toggleSupport()">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>
+    </div>
+
+    <div id="supportWindow" class="support-window">
+        <div class="support-header">
+            <div class="logo-mark" style="width:40px; height:40px; background:rgba(255,255,255,0.2);">
+                <svg width="20" height="20" viewBox="0 0 42 42" fill="none">
+                    <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                    <circle cx="30" cy="12" r="3" fill="#9FE1CB"/>
+                </svg>
+            </div>
+            <div class="bot-info">
+                <h4>Writely Concierge</h4>
+                <p>AI Assistant • Always Online</p>
+            </div>
+        </div>
+        <div id="aiMessages" class="support-messages"></div>
+        <div class="support-footer">
+            <input type="text" id="supportInput" placeholder="Ask about payments, levels...">
+            <button onclick="askAI()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            </button>
+        </div>
+    </div>
+</body>
+</html>

@@ -4,6 +4,7 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  PNPM_VERSION = "9"
 
 # Redirect the root domain to the seeker-web landing page
 [[redirects]]

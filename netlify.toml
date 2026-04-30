@@ -26,14 +26,14 @@
 [[headers]]
   for = "/.env"
   [headers.values]
-    status = 403
+    status = "403"
 
 [[headers]]
   for = "/gateway/*"
   [headers.values]
-    status = 403
+    status = "403"
 
 [[headers]]
   for = "/services/*"
   [headers.values]
-    status = 403
+    status = "403"

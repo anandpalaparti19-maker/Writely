@@ -39,7 +39,7 @@ const Writely = {
         window.location.hostname === ''
     ) 
         ? `http://${window.location.hostname || 'localhost'}:5001/api` 
-        : 'https://writely-api-gateway.onrender.com/api',
+        : 'https://writely-55q5.onrender.com/api',
     
     fetchEvents: async function() {
         try {

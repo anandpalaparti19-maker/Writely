@@ -635,13 +635,15 @@ nav {
 
 @media (max-width: 768px) {
     /* ---------- Layout: sidebar becomes off-canvas drawer ---------- */
-    .dashboard-layout {
+    .dashboard-layout, .admin-layout {
         display: block !important;
         grid-template-columns: 1fr !important;
         min-height: auto !important;
     }
 
-    aside.sidebar, .sidebar, .dashboard-sidebar {
+    /* All sidebar variants across every app */
+    aside.sidebar, .sidebar, .dashboard-sidebar,
+    .admin-sidebar, .tenant-sidebar {
         position: fixed !important;
         top: 0 !important;
         left: -300px !important;
@@ -652,8 +654,10 @@ nav {
         box-shadow: 4px 0 24px rgba(0,0,0,0.15) !important;
         overflow-y: auto !important;
         padding: 24px 18px !important;
+        margin: 0 !important;
     }
-    aside.sidebar.open, .sidebar.open, .dashboard-sidebar.open {
+    aside.sidebar.open, .sidebar.open, .dashboard-sidebar.open,
+    .admin-sidebar.open, .tenant-sidebar.open {
         left: 0 !important;
     }
 
@@ -784,11 +788,47 @@ nav {
 
     /* Onboarding: stack the wizard sidebar */
     .onboarding-container, .onboarding-card {
+        display: block !important;
         grid-template-columns: 1fr !important;
         border-radius: 16px !important;
-        margin: 12px !important;
+        margin: 0 !important;
+        max-width: 100% !important;
     }
-    .onboarding-sidebar { padding: 20px !important; }
+    .onboarding-sidebar {
+        padding: 24px 20px !important;
+        position: static !important;
+        width: auto !important;
+        height: auto !important;
+        left: auto !important;
+    }
+    .onboarding-main { padding: 28px 20px !important; }
+    .step-list {
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+        gap: 12px !important;
+    }
+    .step-label { font-size: 12px !important; }
+
+    /* ---------- Auth / Login / Register cards ---------- */
+    .auth-container, .login-card, .register-card, .auth-card {
+        padding: 28px 22px !important;
+        border-radius: 20px !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        margin: 0 12px !important;
+    }
+    /* The auth pages set body to flex-center with padding — trim it for mobile */
+    body:has(.auth-container), body:has(.login-card), body:has(.register-card) {
+        padding: 16px !important;
+    }
+    .auth-tabs { margin-bottom: 20px !important; }
+    .social-auth { flex-direction: column !important; margin: 20px 0 !important; }
+
+    /* Admin sidebar menu items (dark theme) */
+    .admin-menu-item { padding: 14px 16px !important; font-size: 15px !important; }
+
+    /* Tenant sidebar nav items */
+    .nav-item { padding: 14px 16px !important; }
 
     /* Tenant admin: was using margin-left: 280px — kill that */
     .main-content[style*="margin-left"] {

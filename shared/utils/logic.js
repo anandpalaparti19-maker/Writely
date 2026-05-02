@@ -513,9 +513,15 @@ window.Writely = Writely;
     }
 
     function setupDashboardSidebar() {
-        const sidebar = document.querySelector('aside.sidebar, .dashboard-sidebar');
+        // Matches sidebars across ALL dashboard pages: seeker, writer, admin, tenant
+        const sidebar = document.querySelector(
+            'aside.sidebar, .dashboard-sidebar, .admin-sidebar, .tenant-sidebar, .onboarding-sidebar'
+        );
         if (!sidebar) return;
-        const main = document.querySelector('.main-content, main.main-content');
+        // Main content area — try common class names in order of specificity
+        const main = document.querySelector(
+            '.main-content, main.main-content, .admin-content, .onboarding-main'
+        );
         if (!main) return;
         if (document.querySelector('.dashboard-mobile-topbar')) return;
 
@@ -557,7 +563,9 @@ window.Writely = Writely;
         });
         backdrop.addEventListener('click', closeSidebar);
         sidebar.addEventListener('click', (e) => {
-            if (e.target.tagName === 'A') closeSidebar();
+            // Close sidebar when user taps any link OR nav-item (tenant_admin uses divs)
+            const clickable = e.target.closest('a, .nav-item, .menu-item, .admin-menu-item');
+            if (clickable && sidebar.contains(clickable)) closeSidebar();
         });
         // Close on resize back to desktop
         window.addEventListener('resize', () => {

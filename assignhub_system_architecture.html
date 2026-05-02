@@ -1,0 +1,391 @@
+
+<style>
+*{box-sizing:border-box}
+.ah{font-family:var(--font-sans);padding:1rem 0}
+.ah .section-title{font-size:16px;font-weight:500;color:var(--color-text-primary);margin-bottom:18px}
+.ah .sub-title{font-size:13px;font-weight:500;color:var(--color-text-primary);margin:14px 0 8px}
+.ah .sec{margin-bottom:12px}
+.ah .sec-label{font-size:10px;font-weight:500;letter-spacing:.09em;text-transform:uppercase;padding:3px 9px;border-radius:4px;display:inline-block;margin-bottom:7px}
+.ah .row{display:flex;gap:6px}
+.ah .row+.row{margin-top:6px}
+.ah .box{flex:1;padding:9px 12px;border-radius:8px;border:.5px solid var(--color-border-secondary);background:var(--color-background-secondary);min-width:0;cursor:pointer;transition:opacity .15s}
+.ah .box:hover{opacity:.7}
+.ah .box.wide{flex:2}
+.ah .box.full{flex:1 1 100%}
+.ah .bt{font-size:12px;font-weight:500;color:var(--color-text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ah .bs{font-size:11px;color:var(--color-text-secondary);margin-top:2px}
+.ah .layer{border-left:3px solid transparent;padding-left:10px}
+.ah .lc{border-left-color:#185FA5}
+.ah .ls{border-left-color:#0F6E56}
+.ah .lp{border-left-color:#534AB7}
+.ah .ld{border-left-color:#993C1D}
+.ah .le{border-left-color:#854F0B}
+.ah .conn{text-align:center;font-size:11px;color:var(--color-text-tertiary);margin:5px 0;letter-spacing:1px}
+.ah .divider{border:none;border-top:.5px solid var(--color-border-tertiary);margin:22px 0}
+/* lifecycle steps */
+.ah .life{display:flex;flex-direction:column;gap:0;counter-reset:step}
+.ah .lf-step{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;border:.5px solid var(--color-border-secondary);background:var(--color-background-secondary);margin-bottom:5px;position:relative;cursor:pointer;transition:opacity .15s}
+.ah .lf-step:hover{opacity:.75}
+.ah .lf-num{font-size:10px;font-weight:500;background:var(--color-border-secondary);color:var(--color-text-secondary);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.ah .lf-body{flex:1}
+.ah .lf-title{font-size:12px;font-weight:500;color:var(--color-text-primary)}
+.ah .lf-sub{font-size:11px;color:var(--color-text-secondary);margin-top:2px}
+.ah .lf-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.ah .tag{padding:2px 8px;border-radius:10px;font-size:10px;font-weight:500;border:.5px solid var(--color-border-secondary);color:var(--color-text-secondary);background:var(--color-background-primary)}
+.ah .badge{padding:2px 8px;border-radius:10px;font-size:10px;font-weight:500;border:.5px solid currentColor}
+.ah .b-blue{color:var(--color-text-info);background:var(--color-background-info)}
+.ah .b-green{color:var(--color-text-success);background:var(--color-background-success)}
+.ah .b-amber{color:var(--color-text-warning);background:var(--color-background-warning)}
+.ah .b-red{color:var(--color-text-danger);background:var(--color-background-danger)}
+/* payment flow */
+.ah .pflow{display:flex;align-items:flex-start;gap:0;overflow-x:auto;margin-bottom:14px}
+.ah .pf-step{display:flex;flex-direction:column;align-items:center;flex:1;min-width:72px}
+.ah .pf-num{font-size:9px;font-weight:500;color:var(--color-text-tertiary);margin-bottom:4px}
+.ah .pf-box{padding:8px 6px;border-radius:8px;border:.5px solid var(--color-border-secondary);background:var(--color-background-secondary);text-align:center;width:100%}
+.ah .pf-lbl{font-size:12px;font-weight:500;color:var(--color-text-primary)}
+.ah .pf-sub{font-size:10px;color:var(--color-text-secondary);margin-top:2px}
+.ah .pf-arr{display:flex;align-items:center;padding:0 3px;color:var(--color-text-tertiary);font-size:13px;padding-top:18px;flex-shrink:0}
+/* tabs */
+.ah .tabs{display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap}
+.ah .tab{padding:5px 14px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:.5px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-secondary);transition:all .15s}
+.ah .tab.active{background:var(--color-text-primary);color:var(--color-background-primary);border-color:transparent}
+.ah .panel{display:none}.ah .panel.active{display:block}
+/* grid cards */
+.ah .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.ah .grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.ah .card{padding:10px 12px;border-radius:8px;border:.5px solid var(--color-border-secondary);background:var(--color-background-secondary)}
+.ah .card-num{font-size:20px;font-weight:500;color:var(--color-text-primary)}
+.ah .card-lbl{font-size:11px;font-weight:500;color:var(--color-text-primary);margin-top:2px}
+.ah .card-sub{font-size:10px;color:var(--color-text-secondary);margin-top:2px}
+/* state machine */
+.ah .states{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ah .state{padding:5px 12px;border-radius:6px;font-size:11px;font-weight:500;border:.5px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-primary)}
+.ah .s-arr{font-size:11px;color:var(--color-text-tertiary)}
+/* label colours */
+.ah .lbl-c{background:var(--color-background-info);color:var(--color-text-info)}
+.ah .lbl-s{background:var(--color-background-success);color:var(--color-text-success)}
+.ah .lbl-p{background:#EEEDFE;color:#3C3489}
+@media(prefers-color-scheme:dark){.ah .lbl-p{background:#26215C;color:#AFA9EC}}
+.ah .lbl-d{background:var(--color-background-danger);color:var(--color-text-danger)}
+.ah .lbl-e{background:var(--color-background-warning);color:var(--color-text-warning)}
+.ah .lbl-n{background:var(--color-background-secondary);color:var(--color-text-secondary)}
+</style>
+
+<div class="ah">
+  <div class="section-title">AssignHub — web-based assignment marketplace architecture</div>
+
+  <!-- MAIN TABS -->
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('arch')">System architecture</div>
+    <div class="tab" onclick="showTab('lifecycle')">Assignment lifecycle</div>
+    <div class="tab" onclick="showTab('payments')">Payment process</div>
+    <div class="tab" onclick="showTab('states')">State machine</div>
+  </div>
+
+  <!-- TAB: ARCHITECTURE -->
+  <div class="panel active" id="tab-arch">
+
+    <!-- CLIENT -->
+    <div class="sec layer lc">
+      <div class="sec-label lbl-c">Client layer</div>
+      <div class="row">
+        <div class="box"><div class="bt">Seeker portal</div><div class="bs">React SPA · post assignments · track progress</div></div>
+        <div class="box"><div class="bt">Writer portal</div><div class="bs">React SPA · browse bids · submit work</div></div>
+        <div class="box"><div class="bt">Admin dashboard</div><div class="bs">Next.js · moderation · payouts · analytics</div></div>
+      </div>
+    </div>
+
+    <div class="conn">↕ HTTPS / WebSocket (Socket.io)</div>
+
+    <!-- GATEWAY -->
+    <div class="sec">
+      <div class="sec-label lbl-n">Gateway &amp; edge</div>
+      <div class="row">
+        <div class="box"><div class="bt">CDN</div><div class="bs">CloudFront · assets</div></div>
+        <div class="box"><div class="bt">Load balancer</div><div class="bs">Nginx · sticky sessions</div></div>
+        <div class="box wide"><div class="bt">API gateway</div><div class="bs">JWT validation · rate limiting · routing · API versioning</div></div>
+      </div>
+    </div>
+
+    <div class="conn">↕ REST / gRPC</div>
+
+    <!-- CORE SERVICES -->
+    <div class="sec layer ls">
+      <div class="sec-label lbl-s">Core microservices</div>
+      <div class="row">
+        <div class="box"><div class="bt">Auth service</div><div class="bs">OTP · OAuth · JWT · RBAC</div></div>
+        <div class="box"><div class="bt">User service</div><div class="bs">Profiles · KYC · badges · reputation</div></div>
+        <div class="box"><div class="bt">Assignment service</div><div class="bs">CRUD · categorisation · search</div></div>
+      </div>
+      <div class="row">
+        <div class="box"><div class="bt">Matching engine</div><div class="bs">Skill-based writer ranking · bid scoring</div></div>
+        <div class="box"><div class="bt">Bidding service</div><div class="bs">Writer bids · counters · negotiation</div></div>
+        <div class="box"><div class="bt">Collaboration service</div><div class="bs">File upload · versioning · revision rounds</div></div>
+      </div>
+      <div class="row">
+        <div class="box"><div class="bt">Review &amp; rating service</div><div class="bs">Post-delivery ratings · quality score</div></div>
+        <div class="box"><div class="bt">Chat service</div><div class="bs">Socket.io · DMs · file sharing</div></div>
+        <div class="box"><div class="bt">Notification service</div><div class="bs">Email · in-app · push · SMS</div></div>
+      </div>
+    </div>
+
+    <div class="conn">↕ REST / events</div>
+
+    <!-- PAYMENT SERVICES -->
+    <div class="sec layer lp">
+      <div class="sec-label lbl-p">Payment services</div>
+      <div class="row">
+        <div class="box"><div class="bt">Payment service</div><div class="bs">Gateway orchestration · idempotency keys</div></div>
+        <div class="box"><div class="bt">Escrow service</div><div class="bs">Hold funds · release on approval</div></div>
+        <div class="box"><div class="bt">Wallet service</div><div class="bs">Credits · cashback · top-up</div></div>
+        <div class="box"><div class="bt">Payout service</div><div class="bs">Writer bank transfer · T+2 settlement</div></div>
+      </div>
+    </div>
+
+    <div class="conn">↕ Pub / sub</div>
+
+    <!-- EVENT BUS -->
+    <div class="sec">
+      <div class="sec-label lbl-e">Event bus</div>
+      <div class="row">
+        <div class="box wide"><div class="bt">Kafka event bus</div><div class="bs">assignment.posted · bid.placed · assignment.accepted · work.submitted · work.approved · payment.success · payout.initiated · dispute.raised</div></div>
+        <div class="box"><div class="bt">Redis pub/sub</div><div class="bs">Real-time chat · live bid updates · notifications</div></div>
+      </div>
+    </div>
+
+    <div class="conn">↕ Read / write</div>
+
+    <!-- DATA LAYER -->
+    <div class="sec layer ld">
+      <div class="sec-label lbl-d">Data layer</div>
+      <div class="row">
+        <div class="box"><div class="bt">PostgreSQL</div><div class="bs">Users · payments · escrow · ACID</div></div>
+        <div class="box"><div class="bt">MongoDB</div><div class="bs">Assignments · bids · chat history</div></div>
+        <div class="box"><div class="bt">Redis</div><div class="bs">Sessions · cache · rate limit counters</div></div>
+        <div class="box"><div class="bt">Elasticsearch</div><div class="bs">Full-text assignment search · logs</div></div>
+      </div>
+      <div class="row">
+        <div class="box"><div class="bt">AWS S3</div><div class="bs">Submitted files · reference docs · plagiarism reports</div></div>
+        <div class="box"><div class="bt">TimescaleDB</div><div class="bs">Writer performance metrics · time-series analytics</div></div>
+      </div>
+    </div>
+
+    <div class="conn">↕ External API calls</div>
+
+    <!-- EXTERNAL -->
+    <div class="sec">
+      <div class="sec-label lbl-n">External services</div>
+      <div class="row">
+        <div class="box"><div class="bt">Razorpay / Stripe</div><div class="bs">Cards · UPI · wallets · payouts</div></div>
+        <div class="box"><div class="bt">Turnitin / Copyleaks</div><div class="bs">Plagiarism detection on submissions</div></div>
+        <div class="box"><div class="bt">SendGrid / MSG91</div><div class="bs">Email · SMS OTP · notifications</div></div>
+        <div class="box"><div class="bt">Firebase / AWS SNS</div><div class="bs">Push notifications · real-time sync</div></div>
+      </div>
+    </div>
+
+  </div><!-- /tab-arch -->
+
+  <!-- TAB: LIFECYCLE -->
+  <div class="panel" id="tab-lifecycle">
+    <div class="sub-title">End-to-end assignment journey</div>
+    <div class="life">
+      <div class="lf-step" onclick="sendPrompt('How does the assignment posting step work in AssignHub?')">
+        <div class="lf-num">1</div>
+        <div class="lf-body">
+          <div class="lf-title">Seeker posts an assignment</div>
+          <div class="lf-sub">Subject · word count · deadline · budget range · file attachments uploaded to S3</div>
+          <div class="lf-tags"><span class="badge b-blue">Assignment service</span><span class="badge b-blue">S3 upload</span><span class="tag">Kafka: assignment.posted</span></div>
+        </div>
+      </div>
+      <div class="lf-step" onclick="sendPrompt('How does the matching engine rank writers?')">
+        <div class="lf-num">2</div>
+        <div class="lf-body">
+          <div class="lf-title">Matching engine surfaces relevant writers</div>
+          <div class="lf-sub">Skill tags, subject expertise, rating, past delivery rate, availability — scored and ranked</div>
+          <div class="lf-tags"><span class="badge b-blue">Matching engine</span><span class="tag">ML skill scoring</span><span class="tag">Redis cache</span></div>
+        </div>
+      </div>
+      <div class="lf-step" onclick="sendPrompt('How does bidding work for writers?')">
+        <div class="lf-num">3</div>
+        <div class="lf-body">
+          <div class="lf-title">Writers place bids</div>
+          <div class="lf-sub">Proposed price · timeline · cover note · portfolio sample. Seeker gets real-time bid notifications</div>
+          <div class="lf-tags"><span class="badge b-amber">Bidding service</span><span class="badge b-blue">Chat service</span><span class="tag">Kafka: bid.placed</span></div>
+        </div>
+      </div>
+      <div class="lf-step" onclick="sendPrompt('What happens when a seeker accepts a bid?')">
+        <div class="lf-num">4</div>
+        <div class="lf-body">
+          <div class="lf-title">Seeker accepts a bid — payment locked in escrow</div>
+          <div class="lf-sub">Full amount or milestone held by escrow service. Writer is notified to begin work</div>
+          <div class="lf-tags"><span class="badge b-green">Escrow service</span><span class="badge b-blue">Payment service</span><span class="tag">Kafka: assignment.accepted</span></div>
+        </div>
+      </div>
+      <div class="lf-step" onclick="sendPrompt('How does collaboration and file submission work?')">
+        <div class="lf-num">5</div>
+        <div class="lf-body">
+          <div class="lf-title">Writer works — collaboration &amp; progress updates</div>
+          <div class="lf-sub">Versioned draft uploads to S3, chat messages, deadline reminders via notification service</div>
+          <div class="lf-tags"><span class="badge b-blue">Collaboration service</span><span class="badge b-blue">Chat service</span><span class="tag">S3 versioning</span></div>
+        </div>
+      </div>
+      <div class="lf-step" onclick="sendPrompt('How is plagiarism checked before delivery?')">
+        <div class="lf-num">6</div>
+        <div class="lf-body">
+          <div class="lf-title">Submission + plagiarism check</div>
+          <div class="lf-sub">Final file submitted → Turnitin / Copyleaks API called → report attached to order</div>
+          <div class="lf-tags"><span class="badge b-amber">Plagiarism API</span><span class="tag">Kafka: work.submitted</span><span class="tag">Async worker</span></div>
+        </div>
+      </div>
+      <div class="lf-step" onclick="sendPrompt('What happens during the revision period?')">
+        <div class="lf-num">7</div>
+        <div class="lf-body">
+          <div class="lf-title">Seeker reviews — approve or request revision</div>
+          <div class="lf-sub">N revision rounds allowed per tier. Dispute raised → admin mediation. Timer-based auto-approve</div>
+          <div class="lf-tags"><span class="badge b-amber">Review service</span><span class="tag">48h auto-approve</span><span class="tag">Dispute flow</span></div>
+        </div>
+      </div>
+      <div class="lf-step" onclick="sendPrompt('How does escrow release and writer payout work?')">
+        <div class="lf-num">8</div>
+        <div class="lf-body">
+          <div class="lf-title">Approval → escrow released → writer payout</div>
+          <div class="lf-sub">Escrow unlocked, platform commission deducted, remainder sent to writer via IMPS / Stripe Connect</div>
+          <div class="lf-tags"><span class="badge b-green">Payout service</span><span class="badge b-green">Escrow service</span><span class="tag">Kafka: payment.success</span></div>
+        </div>
+      </div>
+      <div class="lf-step" onclick="sendPrompt('How do ratings and reviews work after delivery?')">
+        <div class="lf-num">9</div>
+        <div class="lf-body">
+          <div class="lf-title">Mutual ratings + reputation update</div>
+          <div class="lf-sub">Seeker rates writer (quality, deadline, communication). Writer rates seeker (clarity, responsiveness)</div>
+          <div class="lf-tags"><span class="badge b-blue">Review &amp; rating service</span><span class="tag">ML reputation score</span></div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /tab-lifecycle -->
+
+  <!-- TAB: PAYMENTS -->
+  <div class="panel" id="tab-payments">
+    <div class="sub-title">Payment process flow</div>
+    <div class="pflow">
+      <div class="pf-step"><div class="pf-num">01</div><div class="pf-box"><div class="pf-lbl">Bid accepted</div><div class="pf-sub">Order confirmed</div></div></div>
+      <div class="pf-arr">›</div>
+      <div class="pf-step"><div class="pf-num">02</div><div class="pf-box"><div class="pf-lbl">Seeker pays</div><div class="pf-sub">UPI · card · wallet</div></div></div>
+      <div class="pf-arr">›</div>
+      <div class="pf-step"><div class="pf-num">03</div><div class="pf-box"><div class="pf-lbl">Escrow holds</div><div class="pf-sub">Funds locked</div></div></div>
+      <div class="pf-arr">›</div>
+      <div class="pf-step"><div class="pf-num">04</div><div class="pf-box"><div class="pf-lbl">Work delivered</div><div class="pf-sub">Plagiarism check</div></div></div>
+      <div class="pf-arr">›</div>
+      <div class="pf-step"><div class="pf-num">05</div><div class="pf-box"><div class="pf-lbl">Approved</div><div class="pf-sub">Or auto-approve</div></div></div>
+      <div class="pf-arr">›</div>
+      <div class="pf-step"><div class="pf-num">06</div><div class="pf-box"><div class="pf-lbl">Commission cut</div><div class="pf-sub">Platform % deducted</div></div></div>
+      <div class="pf-arr">›</div>
+      <div class="pf-step"><div class="pf-num">07</div><div class="pf-box"><div class="pf-lbl">Writer payout</div><div class="pf-sub">T+2 bank transfer</div></div></div>
+    </div>
+
+    <div class="sub-title">Payment methods accepted</div>
+    <div class="row" style="flex-wrap:wrap;gap:4px;margin-bottom:14px">
+      <span class="tag">UPI (GPay · PhonePe)</span>
+      <span class="tag">Credit card</span>
+      <span class="tag">Debit card</span>
+      <span class="tag">Net banking</span>
+      <span class="tag">AssignHub wallet</span>
+      <span class="tag">Stripe (international)</span>
+      <span class="tag">EMI</span>
+    </div>
+
+    <div class="sub-title">Revenue &amp; payout split</div>
+    <div class="grid3" style="margin-bottom:14px">
+      <div class="card"><div class="card-num">75–85%</div><div class="card-lbl">Writer payout</div><div class="card-sub">Released from escrow on approval</div></div>
+      <div class="card"><div class="card-num">15–25%</div><div class="card-lbl">Platform commission</div><div class="card-sub">Varies by order size &amp; writer tier</div></div>
+      <div class="card"><div class="card-num">T+2</div><div class="card-lbl">Settlement time</div><div class="card-sub">IMPS / NEFT / Stripe Connect</div></div>
+    </div>
+
+    <div class="sub-title">Escrow rules</div>
+    <div class="grid2" style="margin-bottom:14px">
+      <div class="card"><div class="card-lbl">Single payment</div><div class="card-sub" style="font-size:11px;margin-top:6px;line-height:1.6">Full amount held at order acceptance. Released in one shot on seeker approval or 48h auto-approve window.</div></div>
+      <div class="card"><div class="card-lbl">Milestone payment</div><div class="card-sub" style="font-size:11px;margin-top:6px;line-height:1.6">Order split into milestones (e.g. outline, draft, final). Each chunk released independently as each milestone is approved.</div></div>
+    </div>
+
+    <div class="sub-title">Failure &amp; refund handling</div>
+    <div class="row" style="flex-wrap:wrap;gap:6px">
+      <div class="box"><div class="bt">Payment failure</div><div class="bs">Retry × 3 → fallback gateway → notify seeker</div></div>
+      <div class="box"><div class="bt">Cancellation refund</div><div class="bs">Full refund before work starts · partial after</div></div>
+      <div class="box"><div class="bt">Dispute raised</div><div class="bs">Escrow frozen → admin mediates → split decision</div></div>
+      <div class="box"><div class="bt">Fraud detection</div><div class="bs">Velocity checks · card fingerprinting · ML flags</div></div>
+    </div>
+  </div><!-- /tab-payments -->
+
+  <!-- TAB: STATE MACHINE -->
+  <div class="panel" id="tab-states">
+    <div class="sub-title">Assignment order state machine</div>
+    <div class="states" style="margin-bottom:16px">
+      <span class="state">DRAFT</span>
+      <span class="s-arr">→</span>
+      <span class="state">OPEN</span>
+      <span class="s-arr">→</span>
+      <span class="state">BIDDING</span>
+      <span class="s-arr">→</span>
+      <span class="state">ACCEPTED</span>
+      <span class="s-arr">→</span>
+      <span class="state">IN_PROGRESS</span>
+      <span class="s-arr">→</span>
+      <span class="state">SUBMITTED</span>
+      <span class="s-arr">→</span>
+      <span class="state">IN_REVIEW</span>
+      <span class="s-arr">→</span>
+      <span class="state">REVISION</span>
+      <span class="s-arr">→</span>
+      <span class="state">APPROVED</span>
+      <span class="s-arr">→</span>
+      <span class="state">COMPLETED</span>
+    </div>
+    <div class="states">
+      <span class="s-arr" style="opacity:0;width:4px"></span>
+      <span class="state" style="border-color:var(--color-border-danger);color:var(--color-text-danger)">CANCELLED</span>
+      <span class="s-arr">←</span>
+      <span class="state" style="opacity:.6">OPEN / BIDDING / IN_PROGRESS</span>
+      <span class="s-arr" style="margin-left:16px">→</span>
+      <span class="state" style="border-color:var(--color-border-danger);color:var(--color-text-danger)">DISPUTED</span>
+      <span class="s-arr">→</span>
+      <span class="state">RESOLVED</span>
+    </div>
+
+    <div class="sub-title">User roles &amp; permissions</div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-lbl">Seeker</div>
+        <div class="card-sub" style="font-size:11px;margin-top:6px;line-height:1.8">
+          Post assignments · Set budget &amp; deadline<br>
+          Browse &amp; compare bids · Accept / reject writer<br>
+          Chat with writer · Download submissions<br>
+          Approve work · Request revisions · Rate writer
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-lbl">Writer (Captain equivalent)</div>
+        <div class="card-sub" style="font-size:11px;margin-top:6px;line-height:1.8">
+          Browse open assignments by subject/skill<br>
+          Place bids · Counter-negotiate budget<br>
+          Upload work drafts (versioned) · Submit final<br>
+          Track earnings · Withdraw to bank · Rate seeker
+        </div>
+      </div>
+    </div>
+
+    <div class="sub-title" style="margin-top:14px">Writer tier system</div>
+    <div class="grid3">
+      <div class="card"><div class="badge b-blue" style="margin-bottom:6px">Bronze</div><div class="card-sub" style="font-size:11px;line-height:1.6">New writers · lower commission cut · limited bids/day · basic support</div></div>
+      <div class="card"><div class="badge b-green" style="margin-bottom:6px">Silver</div><div class="card-sub" style="font-size:11px;line-height:1.6">10+ orders · better commission · priority in matching · revision SLA badge</div></div>
+      <div class="card"><div class="badge b-amber" style="margin-bottom:6px">Gold</div><div class="card-sub" style="font-size:11px;line-height:1.6">50+ orders · 4.5+ rating · lowest commission cut · featured listing · dedicated support</div></div>
+    </div>
+  </div><!-- /tab-states -->
+
+</div>
+
+<script>
+function showTab(id){
+  document.querySelectorAll('.ah .tab').forEach((t,i)=>t.classList.toggle('active',['arch','lifecycle','payments','states'][i]===id));
+  document.querySelectorAll('.ah .panel').forEach(p=>p.classList.toggle('active',p.id==='tab-'+id));
+}
+</script>

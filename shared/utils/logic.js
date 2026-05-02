@@ -574,21 +574,16 @@ window.Writely = Writely;
     }
 
     function replaceLogoMarks() {
-        // New "Seekers & Writers" logo: gold feather inside partial gold circle
-        const newLogoSvg = `
-            <svg width="22" height="22" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <path d="M 10 20 A 14 14 0 0 1 24 10" stroke="#F5C47C" stroke-width="2" stroke-linecap="round" fill="none"/>
-                <path d="M 38 24 A 14 14 0 0 1 32 36" stroke="#F5C47C" stroke-width="2" stroke-linecap="round" fill="none"/>
-                <path d="M 24 38 A 14 14 0 0 1 12 32" stroke="#F5C47C" stroke-width="2" stroke-linecap="round" fill="none"/>
-                <path d="M 18 32 L 32 14" stroke="#F5C47C" stroke-width="2" stroke-linecap="round"/>
-                <path d="M 20 30 L 24 26" stroke="#F5C47C" stroke-width="1.4" stroke-linecap="round"/>
-                <path d="M 23 27 L 26 22" stroke="#F5C47C" stroke-width="1.4" stroke-linecap="round"/>
-                <path d="M 26 24 L 29 20" stroke="#F5C47C" stroke-width="1.4" stroke-linecap="round"/>
-                <path d="M 29 21 L 30 17" stroke="#F5C47C" stroke-width="1.4" stroke-linecap="round"/>
-            </svg>
-        `;
+        // Compute path to logo.png relative to current page depth.
+        // Pages live at /apps/<app>/page.html (depth 2 from root) or at root.
+        // We derive the path from the <script> tag that loaded this file.
+        const scriptEl = document.querySelector('script[src*="shared/utils/logic.js"]');
+        let logoSrc = '/shared/assets/logo.png';
+        if (scriptEl) {
+            logoSrc = scriptEl.getAttribute('src').replace(/utils\/logic\.js.*$/, 'assets/logo.png');
+        }
         document.querySelectorAll('.logo-mark').forEach(mark => {
-            mark.innerHTML = newLogoSvg;
+            mark.innerHTML = `<img src="${logoSrc}" alt="Seekers & Writers" style="width:100%;height:100%;object-fit:cover;object-position:center 38%;transform:scale(2);" />`;
         });
     }
 

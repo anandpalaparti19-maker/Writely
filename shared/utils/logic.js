@@ -118,7 +118,7 @@ window.loginUser = async function(event) {
         const user = userCredential.user;
         
         const userDoc = await firebase.firestore().collection('users').doc(user.uid).get();
-        if (userDoc.exists() && userDoc.data().role === 'WRITER') {
+        if (userDoc.exists && userDoc.data().role === 'WRITER') {
             window.location.href = window.location.pathname.includes('seeker-web') ? '../writer-mobile/writer.html' : 'writer.html';
         } else {
             window.location.href = 'dashboard.html';

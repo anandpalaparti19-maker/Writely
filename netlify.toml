@@ -23,18 +23,37 @@
   to = "/apps/writer-mobile/:splat"
   status = 200
 
-# Security: Prevent access to sensitive files
-[[headers]]
-  for = "/.env"
-  [headers.values]
-    status = "403"
+# Security: Block access to sensitive backend files & folders
+# (Netlify does not support status codes under [[headers]] — must use [[redirects]] with force)
+[[redirects]]
+  from = "/.env"
+  to = "/404.html"
+  status = 404
+  force = true
 
-[[headers]]
-  for = "/gateway/*"
-  [headers.values]
-    status = "403"
+[[redirects]]
+  from = "/gateway/*"
+  to = "/404.html"
+  status = 404
+  force = true
 
+[[redirects]]
+  from = "/services/*"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/.git/*"
+  to = "/404.html"
+  status = 404
+  force = true
+
+# Security headers applied to ALL pages
 [[headers]]
-  for = "/services/*"
+  for = "/*"
   [headers.values]
-    status = "403"
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"

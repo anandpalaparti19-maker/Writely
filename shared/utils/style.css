@@ -872,16 +872,16 @@ nav {
         min-width: 0;
     }
 
-    .project-table {
+    .project-table, .transaction-table, .data-table {
         display: block !important;
         border: none !important;
         background: transparent !important;
         border-radius: 0 !important;
         overflow: visible !important;
     }
-    .project-table thead { display: none !important; }
-    .project-table tbody { display: block !important; }
-    .project-table tr {
+    .project-table thead, .transaction-table thead, .data-table thead { display: none !important; }
+    .project-table tbody, .transaction-table tbody, .data-table tbody { display: block !important; }
+    .project-table tr, .transaction-table tr, .data-table tr {
         display: block !important;
         background: white !important;
         border: 1px solid var(--border) !important;
@@ -890,7 +890,7 @@ nav {
         margin-bottom: 12px !important;
         box-shadow: var(--shadow-sm);
     }
-    .project-table td {
+    .project-table td, .transaction-table td, .data-table td {
         display: flex !important;
         justify-content: space-between;
         align-items: center;
@@ -900,25 +900,50 @@ nav {
         gap: 12px;
         flex-wrap: wrap;
     }
-    .project-table td:first-child {
+    .project-table td:first-child,
+    .transaction-table td:first-child,
+    .data-table td:first-child {
         border-top: none !important;
         padding-top: 0 !important;
         display: block !important;
         margin-bottom: 4px;
     }
-    .project-table td:last-child {
+    .project-table td:last-child,
+    .transaction-table td:last-child,
+    .data-table td:last-child {
         padding-bottom: 0 !important;
         padding-top: 12px !important;
     }
-    .project-table td:last-child .btn {
+    .project-table td:last-child .btn,
+    .transaction-table td:last-child .btn,
+    .data-table td:last-child .btn {
         width: 100% !important;
     }
     /* Empty-state / loading row */
     .project-table tr:has(.loading-container),
-    .project-table tr:has(td[colspan]) {
+    .project-table tr:has(td[colspan]),
+    .transaction-table tr:has(td[colspan]),
+    .data-table tr:has(td[colspan]) {
         padding: 24px !important;
         text-align: center;
     }
+
+    /* ---------- Wallet page: hero balance card stacks on mobile ---------- */
+    .wallet-card {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 20px !important;
+        padding: 28px 24px !important;
+        border-radius: 24px !important;
+    }
+    .wallet-card > div:first-child { text-align: left; }
+    .wallet-card #walletBalance { font-size: 36px !important; }
+    .wallet-card > div:last-child {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 10px !important;
+    }
+    .wallet-card .btn { padding: 12px !important; font-size: 14px !important; width: 100% !important; }
 
     /* ---------- Modals (trackModal / bidsModal on projects page) ---------- */
     div[id$="Modal"] > div {

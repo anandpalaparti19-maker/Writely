@@ -186,12 +186,15 @@ nav {
 .logo-mark {
     width: 36px;
     height: 36px;
-    background: var(--ink-purple);
+    background: #1A1B4B; /* deep navy to match Seekers & Writers brand */
     border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
 }
+/* Inline style overrides (e.g. writer pages use style="background: var(--flow-teal)") — force navy */
+.logo-mark[style] { background: #1A1B4B !important; }
 
 .nav-links {
     display: flex;

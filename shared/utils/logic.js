@@ -573,21 +573,41 @@ window.Writely = Writely;
         });
     }
 
-    function replaceLogoMarks() {
+    function getLogoSrc() {
         // Compute path to logo.png relative to current page depth.
-        // Pages live at /apps/<app>/page.html (depth 2 from root) or at root.
-        // We derive the path from the <script> tag that loaded this file.
         const scriptEl = document.querySelector('script[src*="shared/utils/logic.js"]');
-        let logoSrc = '/shared/assets/logo.png';
         if (scriptEl) {
-            logoSrc = scriptEl.getAttribute('src').replace(/utils\/logic\.js.*$/, 'assets/logo.png');
+            return scriptEl.getAttribute('src').replace(/utils\/logic\.js.*$/, 'assets/logo.png');
         }
+        return '/shared/assets/logo.png';
+    }
+
+    function replaceLogoMarks() {
+        const logoSrc = getLogoSrc();
         document.querySelectorAll('.logo-mark').forEach(mark => {
             mark.innerHTML = `<img src="${logoSrc}" alt="Seekers & Writers" style="width:100%;height:100%;object-fit:cover;object-position:center 38%;transform:scale(2);" />`;
         });
     }
 
+    function setFavicon() {
+        const logoSrc = getLogoSrc();
+        // Remove any existing favicons to avoid duplicates
+        document.querySelectorAll('link[rel*="icon"]').forEach(el => el.remove());
+        // Add the new one
+        const link = document.createElement('link');
+        link.rel = 'icon';
+        link.type = 'image/png';
+        link.href = logoSrc;
+        document.head.appendChild(link);
+        // Also Apple touch icon for iOS bookmarks/PWA
+        const apple = document.createElement('link');
+        apple.rel = 'apple-touch-icon';
+        apple.href = logoSrc;
+        document.head.appendChild(apple);
+    }
+
     function setup() {
+        setFavicon();
         replaceLogoMarks();
         setupTopNav();
         setupDashboardSidebar();

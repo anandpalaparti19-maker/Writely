@@ -468,3 +468,55 @@ window.logout = Writely.logout;
 Writely.registerUser = window.registerUser;
 Writely.loginUser = window.loginUser;
 window.Writely = Writely;
+
+// ============================================
+// 📱 Mobile Hamburger Menu — Auto-inject across all pages
+// ============================================
+(function injectMobileNav() {
+    function setup() {
+        document.querySelectorAll('nav').forEach(nav => {
+            const links = nav.querySelector('.nav-links');
+            if (!links) return;
+            if (nav.querySelector('.hamburger-btn')) return; // already injected
+
+            const btn = document.createElement('button');
+            btn.className = 'hamburger-btn';
+            btn.setAttribute('aria-label', 'Toggle menu');
+            btn.setAttribute('aria-expanded', 'false');
+            btn.innerHTML = '<span></span><span></span><span></span>';
+
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isOpen = links.classList.toggle('open');
+                btn.classList.toggle('active', isOpen);
+                btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            });
+
+            // Close menu when a link is clicked or when clicking outside
+            links.addEventListener('click', (e) => {
+                if (e.target.tagName === 'A') {
+                    links.classList.remove('open');
+                    btn.classList.remove('active');
+                    btn.setAttribute('aria-expanded', 'false');
+                }
+            });
+            document.addEventListener('click', (e) => {
+                if (!nav.contains(e.target) && links.classList.contains('open')) {
+                    links.classList.remove('open');
+                    btn.classList.remove('active');
+                    btn.setAttribute('aria-expanded', 'false');
+                }
+            });
+
+            // Insert button at the end of the nav's inner container (or nav itself)
+            const container = nav.querySelector('.container') || nav;
+            container.appendChild(btn);
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setup);
+    } else {
+        setup();
+    }
+})();

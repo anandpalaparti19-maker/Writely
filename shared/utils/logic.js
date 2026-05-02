@@ -470,14 +470,14 @@ Writely.loginUser = window.loginUser;
 window.Writely = Writely;
 
 // ============================================
-// 📱 Mobile Hamburger Menu — Auto-inject across all pages
+// 📱 Mobile Navigation — Auto-inject across all pages
 // ============================================
 (function injectMobileNav() {
-    function setup() {
+    function setupTopNav() {
         document.querySelectorAll('nav').forEach(nav => {
             const links = nav.querySelector('.nav-links');
             if (!links) return;
-            if (nav.querySelector('.hamburger-btn')) return; // already injected
+            if (nav.querySelector('.hamburger-btn')) return;
 
             const btn = document.createElement('button');
             btn.className = 'hamburger-btn';
@@ -492,7 +492,6 @@ window.Writely = Writely;
                 btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
             });
 
-            // Close menu when a link is clicked or when clicking outside
             links.addEventListener('click', (e) => {
                 if (e.target.tagName === 'A') {
                     links.classList.remove('open');
@@ -508,10 +507,67 @@ window.Writely = Writely;
                 }
             });
 
-            // Insert button at the end of the nav's inner container (or nav itself)
             const container = nav.querySelector('.container') || nav;
             container.appendChild(btn);
         });
+    }
+
+    function setupDashboardSidebar() {
+        const sidebar = document.querySelector('aside.sidebar, .dashboard-sidebar');
+        if (!sidebar) return;
+        const main = document.querySelector('.main-content, main.main-content');
+        if (!main) return;
+        if (document.querySelector('.dashboard-mobile-topbar')) return;
+
+        // Top bar with menu button (mobile only — CSS hides on desktop)
+        const topbar = document.createElement('div');
+        topbar.className = 'dashboard-mobile-topbar';
+        topbar.innerHTML = `
+            <button class="sidebar-toggle-btn" aria-label="Open menu" aria-expanded="false">
+                <span></span><span></span><span></span>
+            </button>
+            <div class="dashboard-mobile-title">Writely</div>
+        `;
+        main.insertBefore(topbar, main.firstChild);
+
+        // Backdrop overlay
+        const backdrop = document.createElement('div');
+        backdrop.className = 'sidebar-backdrop';
+        document.body.appendChild(backdrop);
+
+        const toggleBtn = topbar.querySelector('.sidebar-toggle-btn');
+        const closeSidebar = () => {
+            sidebar.classList.remove('open');
+            backdrop.classList.remove('open');
+            toggleBtn.classList.remove('active');
+            toggleBtn.setAttribute('aria-expanded', 'false');
+            document.body.style.overflow = '';
+        };
+        const openSidebar = () => {
+            sidebar.classList.add('open');
+            backdrop.classList.add('open');
+            toggleBtn.classList.add('active');
+            toggleBtn.setAttribute('aria-expanded', 'true');
+            document.body.style.overflow = 'hidden';
+        };
+
+        toggleBtn.addEventListener('click', () => {
+            if (sidebar.classList.contains('open')) closeSidebar();
+            else openSidebar();
+        });
+        backdrop.addEventListener('click', closeSidebar);
+        sidebar.addEventListener('click', (e) => {
+            if (e.target.tagName === 'A') closeSidebar();
+        });
+        // Close on resize back to desktop
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 768) closeSidebar();
+        });
+    }
+
+    function setup() {
+        setupTopNav();
+        setupDashboardSidebar();
     }
 
     if (document.readyState === 'loading') {

@@ -624,6 +624,202 @@ nav {
     }
 }
 
+/* ============================================
+   📊 DASHBOARD MOBILE OVERRIDES (auto-applies to seeker/writer/admin/tenant)
+   Uses !important because per-page inline <style> blocks load AFTER this file.
+   ============================================ */
+
+/* Mobile dashboard topbar (auto-injected by logic.js) — hidden on desktop */
+.dashboard-mobile-topbar { display: none; }
+.sidebar-backdrop { display: none; }
+
+@media (max-width: 768px) {
+    /* ---------- Layout: sidebar becomes off-canvas drawer ---------- */
+    .dashboard-layout {
+        display: block !important;
+        grid-template-columns: 1fr !important;
+        min-height: auto !important;
+    }
+
+    aside.sidebar, .sidebar, .dashboard-sidebar {
+        position: fixed !important;
+        top: 0 !important;
+        left: -300px !important;
+        width: 280px !important;
+        height: 100vh !important;
+        z-index: 1000 !important;
+        transition: left 0.3s ease !important;
+        box-shadow: 4px 0 24px rgba(0,0,0,0.15) !important;
+        overflow-y: auto !important;
+        padding: 24px 18px !important;
+    }
+    aside.sidebar.open, .sidebar.open, .dashboard-sidebar.open {
+        left: 0 !important;
+    }
+
+    /* Backdrop overlay when sidebar is open */
+    .sidebar-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 999;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
+    .sidebar-backdrop.open {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    /* Main content takes full width */
+    .main-content, main.main-content {
+        margin-left: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+    }
+
+    /* Mobile topbar (injected at top of .main-content by logic.js) */
+    .dashboard-mobile-topbar {
+        display: flex !important;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 16px;
+        background: white;
+        border-bottom: 1px solid var(--border);
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .dashboard-mobile-title {
+        font-weight: 700;
+        font-size: 17px;
+        color: var(--ink-purple);
+    }
+    .sidebar-toggle-btn {
+        background: transparent;
+        border: none;
+        padding: 8px;
+        cursor: pointer;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 5px;
+    }
+    .sidebar-toggle-btn span {
+        display: block;
+        width: 22px;
+        height: 2px;
+        background: var(--ink-purple);
+        border-radius: 2px;
+        transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+    .sidebar-toggle-btn.active span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .sidebar-toggle-btn.active span:nth-child(2) { opacity: 0; }
+    .sidebar-toggle-btn.active span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+    /* Add padding to actual content (not the topbar) */
+    .main-content > *:not(.dashboard-mobile-topbar) {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+    .main-content > h1:first-of-type,
+    .main-content > h2:first-of-type {
+        padding-top: 20px;
+    }
+
+    /* ---------- All grid types collapse to single or paired columns ---------- */
+    .stats-grid, .stat-grid, .cards-grid, .dashboard-grid,
+    .pricing-grid, .feature-grid {
+        grid-template-columns: 1fr !important;
+        gap: 14px !important;
+        margin-bottom: 24px !important;
+    }
+
+    .settings-grid, .chat-container, .onboarding-container,
+    [class*="-grid"]:not(.nav-links) {
+        grid-template-columns: 1fr !important;
+        gap: 16px !important;
+    }
+
+    /* Cards: smaller padding, no scale-on-hover (jittery on touch) */
+    .stat-card, .assignment-card, .job-card, .usage-card,
+    .pricing-card, .project-card, .submission-card {
+        padding: 18px !important;
+        border-radius: 16px !important;
+        margin-bottom: 12px !important;
+    }
+    .stat-card:hover, .assignment-card:hover, .job-card:hover {
+        transform: none !important;
+    }
+
+    /* Cards with internal flex (e.g. assignment-card has space-between) — stack content */
+    .assignment-card, .job-card, .active-project, .submission-card {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 12px !important;
+    }
+    .assignment-card > *, .job-card > *, .active-project > * {
+        width: 100% !important;
+    }
+
+    /* Stat card sizing */
+    .stat-val { font-size: 26px !important; }
+    .stat-lbl { font-size: 11px !important; }
+
+    /* Chat / messages page: stack the sidebar list above the chat window */
+    .chat-container {
+        height: auto !important;
+        min-height: calc(100vh - 60px);
+    }
+    .chat-list, .messages-sidebar {
+        max-height: 35vh;
+        overflow-y: auto;
+    }
+
+    /* Onboarding: stack the wizard sidebar */
+    .onboarding-container, .onboarding-card {
+        grid-template-columns: 1fr !important;
+        border-radius: 16px !important;
+        margin: 12px !important;
+    }
+    .onboarding-sidebar { padding: 20px !important; }
+
+    /* Tenant admin: was using margin-left: 280px — kill that */
+    .main-content[style*="margin-left"] {
+        margin-left: 0 !important;
+    }
+
+    /* Long page titles wrap nicely */
+    .main-content h1, .main-content h2 {
+        font-size: 24px !important;
+        word-break: break-word;
+    }
+
+    /* Status badges shouldn't overflow */
+    .status-badge { white-space: nowrap; }
+
+    /* Fix forms inside dashboard pages */
+    .main-content form {
+        padding: 0 !important;
+    }
+    .main-content input,
+    .main-content textarea,
+    .main-content select {
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* Pricing page specific */
+    body[class*="pricing"] { padding: 20px !important; }
+    .pricing-container { padding: 0 !important; }
+}
+
 /* ---------- ACCESSIBILITY: Dark mode readiness (optional hook) ---------- */
 @media (prefers-color-scheme: dark) {
     /* Intentionally minimal — opt-in per page via body class. */

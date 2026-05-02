@@ -1,7 +1,7 @@
 services:
   # --- BACKEND: API Gateway ---
   - type: web
-    name: writely-api
+    name: writely-api-gateway
     env: node
     region: singapore # Optimized for India
     plan: free

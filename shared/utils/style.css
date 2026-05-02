@@ -858,6 +858,92 @@ nav {
     /* Pricing page specific */
     body[class*="pricing"] { padding: 20px !important; }
     .pricing-container { padding: 0 !important; }
+
+    /* ---------- Projects page: convert table to stacked cards ---------- */
+    .project-filters {
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+        margin-bottom: 20px !important;
+    }
+    .filter-btn {
+        padding: 8px 14px !important;
+        font-size: 13px !important;
+        flex: 1 1 calc(50% - 8px);
+        min-width: 0;
+    }
+
+    .project-table {
+        display: block !important;
+        border: none !important;
+        background: transparent !important;
+        border-radius: 0 !important;
+        overflow: visible !important;
+    }
+    .project-table thead { display: none !important; }
+    .project-table tbody { display: block !important; }
+    .project-table tr {
+        display: block !important;
+        background: white !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 16px !important;
+        padding: 16px !important;
+        margin-bottom: 12px !important;
+        box-shadow: var(--shadow-sm);
+    }
+    .project-table td {
+        display: flex !important;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0 !important;
+        border-top: 1px solid #F3F4F6 !important;
+        font-size: 14px !important;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .project-table td:first-child {
+        border-top: none !important;
+        padding-top: 0 !important;
+        display: block !important;
+        margin-bottom: 4px;
+    }
+    .project-table td:last-child {
+        padding-bottom: 0 !important;
+        padding-top: 12px !important;
+    }
+    .project-table td:last-child .btn {
+        width: 100% !important;
+    }
+    /* Empty-state / loading row */
+    .project-table tr:has(.loading-container),
+    .project-table tr:has(td[colspan]) {
+        padding: 24px !important;
+        text-align: center;
+    }
+
+    /* ---------- Modals (trackModal / bidsModal on projects page) ---------- */
+    div[id$="Modal"] > div {
+        padding: 24px !important;
+        border-radius: 20px !important;
+        max-width: 100% !important;
+        max-height: 92vh !important;
+    }
+    div[id$="Modal"] > div > h2 { font-size: 20px !important; }
+    div[id$="Modal"] > div > p { font-size: 13px !important; margin-bottom: 20px !important; }
+
+    /* ---------- Tracking stepper — scale down for phones ---------- */
+    .tracking-stepper { padding: 0 !important; margin-bottom: 20px !important; }
+    .step-dot {
+        width: 26px !important;
+        height: 26px !important;
+        font-size: 11px !important;
+    }
+    .tracking-stepper::before { top: 12px !important; }
+    .step-label {
+        font-size: 9px !important;
+        letter-spacing: 0 !important;
+        text-align: center;
+        line-height: 1.2;
+    }
 }
 
 /* ---------- ACCESSIBILITY: Dark mode readiness (optional hook) ---------- */

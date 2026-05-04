@@ -149,9 +149,8 @@
             btn.disabled = true;
 
             try {
-                const response = await fetch(`${Writely.API_URL}/wallets/${user.uid}/withdraw`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                const response = await Writely.apiFetch(`/wallets/${user.uid}/withdraw`, {
+                    method: 'POST'
                 });
 
                 const result = await response.json();

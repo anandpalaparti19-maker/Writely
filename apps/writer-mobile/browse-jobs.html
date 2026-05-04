@@ -298,9 +298,8 @@
 
             try {
                 const jobId = document.getElementById('jobId').value;
-                const response = await fetch(`http://localhost:5001/api/assignments/${jobId}/bid`, {
+                const response = await Writely.apiFetch(`/assignments/${jobId}/bid`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(bidData)
                 });
 

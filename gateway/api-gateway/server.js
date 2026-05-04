@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 import Razorpay from 'razorpay';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
@@ -25,11 +26,85 @@ const razorpay = new Razorpay({
     key_secret: process.env.RAZORPAY_KEY_SECRET || 'rzp_test_secret_mock'
 });
 
-const upload = multer({ storage: multer.memoryStorage() });
+// File uploads: max 10MB, 5 files, only common document/image mimetypes
+const ALLOWED_MIMES = new Set([
+    'application/pdf', 'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'image/jpeg', 'image/png', 'image/webp',
+    'text/plain', 'application/zip'
+]);
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024, files: 5 }, // 10MB/file, 5 files max
+    fileFilter: (req, file, cb) => {
+        if (ALLOWED_MIMES.has(file.mimetype)) return cb(null, true);
+        cb(new Error(`File type not allowed: ${file.mimetype}`));
+    }
+});
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+
+// --- CORS: restrict to trusted origins ---
+const allowedOriginPatterns = [
+    /^https:\/\/([a-z0-9-]+\.)?netlify\.app$/i,   // any netlify subdomain (deploy previews too)
+    /^https:\/\/([a-z0-9-]+\.)?onrender\.com$/i,
+    /^http:\/\/localhost(:\d+)?$/i,
+    /^http:\/\/127\.0\.0\.1(:\d+)?$/i,
+    /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/i
+];
+app.use(cors({
+    origin: (origin, cb) => {
+        // Allow same-origin / curl / Postman (no Origin header)
+        if (!origin) return cb(null, true);
+        if (allowedOriginPatterns.some(rx => rx.test(origin))) return cb(null, true);
+        console.warn('CORS blocked origin:', origin);
+        cb(new Error('Origin not allowed'));
+    },
+    credentials: true
+}));
+
+app.use(express.json({ limit: '1mb' }));
+
+// --- Rate limiters ---
+const generalLimiter = rateLimit({
+    windowMs: 60 * 1000,   // 1 minute
+    max: 120,              // 120 req/min per IP
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests, slow down.' }
+});
+const aiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,               // AI chat is expensive: 10/min per IP
+    message: { error: 'AI chat rate limit exceeded. Wait a minute.' }
+});
+const paymentLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    message: { error: 'Too many payment attempts.' }
+});
+app.use(generalLimiter);
+
+// --- AUTH MIDDLEWARE: verifies Firebase ID tokens ---
+async function requireAuth(req, res, next) {
+    try {
+        const authHeader = req.headers.authorization || '';
+        if (!authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ error: 'Missing authorization token' });
+        }
+        const idToken = authHeader.substring(7);
+        const decoded = await admin.auth().verifyIdToken(idToken);
+        req.user = decoded; // { uid, email, ... }
+        next();
+    } catch (err) {
+        return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+}
+
+// Health check (public, no auth) — used by Render and uptime monitors
+app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
 console.log('✅ Writely API Gateway (Firebase Admin) Starting...');
 
@@ -38,50 +113,71 @@ app.get('/api/payments/razorpay/config', (req, res) => {
     res.json({ keyId: process.env.RAZORPAY_KEY_ID || 'rzp_test_mock' });
 });
 
-app.post('/api/payments/razorpay/create-order', async (req, res) => {
+app.post('/api/payments/razorpay/create-order', paymentLimiter, requireAuth, async (req, res) => {
     try {
-        const { amount, currency = "INR", receipt = "receipt_order_1" } = req.body;
-        const order = await razorpay.orders.create({ amount: Math.round(amount * 100), currency, receipt });
+        const { amount, currency = "INR" } = req.body;
+        const numAmount = Number(amount);
+        if (!Number.isFinite(numAmount) || numAmount <= 0 || numAmount > 100000) {
+            return res.status(400).json({ error: 'Invalid amount (must be 1–100000)' });
+        }
+        const order = await razorpay.orders.create({
+            amount: Math.round(numAmount * 100),
+            currency,
+            receipt: `rcpt_${req.user.uid.substring(0, 8)}_${Date.now()}`
+        });
         res.json(order);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('Create order error:', err.message);
+        res.status(500).json({ error: 'Could not create order' });
     }
 });
 
-app.post('/api/payments/razorpay/verify', async (req, res) => {
+app.post('/api/payments/razorpay/verify', paymentLimiter, requireAuth, async (req, res) => {
     try {
-        const { razorpay_order_id, razorpay_payment_id, razorpay_signature, userId } = req.body;
-        const secret = process.env.RAZORPAY_KEY_SECRET || 'rzp_test_secret_mock';
-
-        const body = razorpay_order_id + "|" + razorpay_payment_id;
-        const expectedSignature = crypto
-            .createHmac('sha256', secret)
-            .update(body.toString())
-            .digest('hex');
-
-        if (expectedSignature === razorpay_signature) {
-            // Update subscription in Firestore from backend
-            const endDate = new Date();
-            endDate.setDate(endDate.getDate() + 11); // Example: 11 days
-
-            await db.collection('users').doc(userId).update({
-                subscription: {
-                    type: 'ONE_DAY_PASS',
-                    expiresAt: admin.firestore.Timestamp.fromDate(endDate)
-                }
-            });
-
-            res.json({ status: 'success', message: 'Payment verified and subscription activated', expiresAt: endDate });
-        } else {
-            res.status(400).json({ error: 'Invalid signature' });
+        const { razorpay_order_id, razorpay_payment_id, razorpay_signature, planType } = req.body;
+        if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+            return res.status(400).json({ error: 'Missing payment parameters' });
         }
+
+        const secret = process.env.RAZORPAY_KEY_SECRET || 'rzp_test_secret_mock';
+        const body = `${razorpay_order_id}|${razorpay_payment_id}`;
+        const expectedSignature = crypto.createHmac('sha256', secret).update(body).digest('hex');
+
+        if (expectedSignature !== razorpay_signature) {
+            return res.status(400).json({ error: 'Invalid signature' });
+        }
+
+        // userId comes from the verified Firebase token — NOT from the request body (prevents spoofing)
+        const userId = req.user.uid;
+        const endDate = new Date();
+        let subscriptionField = 'subscription';
+        let subType = 'SEEKER_PASS';
+
+        if (planType === 'WRITER_ZERO_FEE') {
+            endDate.setHours(endDate.getHours() + 24); // 24 hours
+            subscriptionField = 'writerSubscription';
+            subType = 'WRITER_ZERO_FEE';
+        } else {
+            endDate.setDate(endDate.getDate() + 11);  // 11 days for seeker pass
+        }
+
+        await db.collection('users').doc(userId).update({
+            [subscriptionField]: {
+                type: subType,
+                expiresAt: admin.firestore.Timestamp.fromDate(endDate),
+                paymentId: razorpay_payment_id
+            }
+        });
+
+        res.json({ status: 'success', message: 'Payment verified', expiresAt: endDate });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('Verify payment error:', err.message);
+        res.status(500).json({ error: 'Verification failed' });
     }
 });
 
-// --- ESCROW ---
-app.post('/api/assignments/:id/escrow', async (req, res) => {
+// --- ESCROW (deprecated, kept for compatibility; use /assign instead) ---
+app.post('/api/assignments/:id/escrow', requireAuth, async (req, res) => {
     try {
         const assignmentRef = db.collection('assignments').doc(req.params.id);
         const assignmentSnap = await assignmentRef.get();
@@ -124,12 +220,24 @@ app.post('/api/assignments/:id/escrow', async (req, res) => {
     }
 });
 
-// --- RELEASE FUNDS ---
-app.post('/api/assignments/:id/release', async (req, res) => {
+// --- RELEASE FUNDS (only the SEEKER who owns the assignment can release) ---
+app.post('/api/assignments/:id/release', requireAuth, async (req, res) => {
     try {
         const assignmentRef = db.collection('assignments').doc(req.params.id);
         const assignmentSnap = await assignmentRef.get();
+        if (!assignmentSnap.exists) return res.status(404).json({ error: 'Assignment not found' });
         const assignment = assignmentSnap.data();
+
+        // Ownership check
+        if (assignment.seekerId !== req.user.uid) {
+            return res.status(403).json({ error: 'Only the seeker can release funds' });
+        }
+        if (assignment.status === 'COMPLETED') {
+            return res.status(400).json({ error: 'Already released' });
+        }
+        if (!assignment.activeWriterId) {
+            return res.status(400).json({ error: 'No writer assigned' });
+        }
 
         let writerDeduction = 15; // Standard
 
@@ -175,9 +283,20 @@ app.post('/api/assignments/:id/release', async (req, res) => {
 });
 
 // --- CREATE ASSIGNMENT ---
-app.post('/api/assignments', upload.array('attachments', 5), async (req, res) => {
+app.post('/api/assignments', requireAuth, upload.array('attachments', 5), async (req, res) => {
     try {
-        const { title, description, budget, seekerId, pages, deliveryMethod, deliveryAddress } = req.body;
+        const { title, description, budget, pages, deliveryMethod, deliveryAddress } = req.body;
+
+        // Validate
+        if (!title || title.trim().length < 3) return res.status(400).json({ error: 'Title required (min 3 chars)' });
+        if (!description || description.trim().length < 10) return res.status(400).json({ error: 'Description required (min 10 chars)' });
+        const numBudget = Number(budget);
+        if (!Number.isFinite(numBudget) || numBudget < 50 || numBudget > 500000) {
+            return res.status(400).json({ error: 'Budget must be ₹50 – ₹500,000' });
+        }
+
+        // seekerId comes from verified token, NOT request body
+        const seekerId = req.user.uid;
         const attachments = [];
 
         if (req.files) {
@@ -189,20 +308,20 @@ app.post('/api/assignments', upload.array('attachments', 5), async (req, res) =>
                     blobStream.on('finish', resolve);
                     blobStream.end(file.buffer);
                 });
-                const [url] = await blob.getSignedUrl({ action: 'read', expires: '01-01-2100' });
-                attachments.push({ filename: file.originalname, url, mimetype: file.mimetype, size: file.size });
+                // Store only path; generate short-lived signed URLs on-demand via /download
+                attachments.push({ filename: file.originalname, storagePath: blob.name, mimetype: file.mimetype, size: file.size });
             }
         }
 
         const docRef = await db.collection('assignments').add({
-            title: title || '',
-            description: description || '',
+            title: title.trim(),
+            description: description.trim(),
             pages: Number(pages) || 0,
-            budget: Number(budget) || 0,
-            seekerId: seekerId || '',
+            budget: numBudget,
+            seekerId,
             status: 'POSTED',
             deliveryMethod: deliveryMethod || 'Digital',
-            deliveryAddress: deliveryAddress || '',
+            deliveryAddress: (deliveryAddress || '').trim(),
             attachments,
             createdAt: FieldValue.serverTimestamp()
         });
@@ -214,8 +333,8 @@ app.post('/api/assignments', upload.array('attachments', 5), async (req, res) =>
     }
 });
 
-// --- GET JOB FEED ---
-app.get('/api/assignments', async (req, res) => {
+// --- GET JOB FEED (public list of POSTED jobs; only writers care, but open is fine) ---
+app.get('/api/assignments', requireAuth, async (req, res) => {
     try {
         const snapshot = await db.collection('assignments')
             .where('status', '==', 'POSTED')
@@ -238,23 +357,47 @@ app.get('/api/assignments', async (req, res) => {
 });
 
 // --- SUBMIT BID ---
-app.post('/api/assignments/:id/bid', async (req, res) => {
+app.post('/api/assignments/:id/bid', requireAuth, async (req, res) => {
     try {
-        const { writerId, amount, proposal } = req.body;
-        await db.collection('assignments').doc(req.params.id).update({
-            bids: FieldValue.arrayUnion({ writerId, amount, proposal, timestamp: new Date() }),
+        const { amount, proposal } = req.body;
+        const writerId = req.user.uid; // from token, not client
+        const numAmount = Number(amount);
+
+        if (!Number.isFinite(numAmount) || numAmount < 50 || numAmount > 500000) {
+            return res.status(400).json({ error: 'Bid amount must be ₹50 – ₹500,000' });
+        }
+        if (!proposal || proposal.trim().length < 10) {
+            return res.status(400).json({ error: 'Proposal required (min 10 chars)' });
+        }
+
+        const assignmentRef = db.collection('assignments').doc(req.params.id);
+        const snap = await assignmentRef.get();
+        if (!snap.exists) return res.status(404).json({ error: 'Assignment not found' });
+        const asn = snap.data();
+        if (asn.status !== 'POSTED' && asn.status !== 'BIDDING') {
+            return res.status(400).json({ error: 'Bidding closed for this assignment' });
+        }
+        if (asn.seekerId === writerId) {
+            return res.status(400).json({ error: "You can't bid on your own assignment" });
+        }
+
+        await assignmentRef.update({
+            bids: FieldValue.arrayUnion({ writerId, amount: numAmount, proposal: proposal.trim(), timestamp: new Date() }),
             status: 'BIDDING'
         });
         res.json({ message: 'Bid submitted successfully' });
     } catch (err) {
+        console.error('Bid error:', err.message);
         res.status(400).json({ error: err.message });
     }
 });
 
-// --- ASSIGN WRITER & START PROJECT (WITH ESCROW) ---
-app.post('/api/assignments/:id/assign', async (req, res) => {
+// --- ASSIGN WRITER & START PROJECT (only the SEEKER can do this) ---
+app.post('/api/assignments/:id/assign', requireAuth, async (req, res) => {
     try {
         const { writerId } = req.body;
+        if (!writerId) return res.status(400).json({ error: 'writerId required' });
+
         const assignmentRef = db.collection('assignments').doc(req.params.id);
         
         await db.runTransaction(async (t) => {
@@ -262,6 +405,10 @@ app.post('/api/assignments/:id/assign', async (req, res) => {
             if (!snap.exists) throw new Error("Assignment not found");
             const assignment = snap.data();
 
+            // Ownership: only the seeker who owns the assignment can hire
+            if (assignment.seekerId !== req.user.uid) {
+                throw new Error("Only the seeker can hire a writer");
+            }
             if (assignment.status !== 'POSTED' && assignment.status !== 'BIDDING') {
                 throw new Error("Project is no longer available for hiring");
             }
@@ -309,10 +456,14 @@ app.post('/api/assignments/:id/assign', async (req, res) => {
     }
 });
 
-// --- WITHDRAW FUNDS ---
-app.post('/api/wallets/:userId/withdraw', async (req, res) => {
+// --- WITHDRAW FUNDS (userId in URL MUST match authenticated user) ---
+app.post('/api/wallets/:userId/withdraw', requireAuth, async (req, res) => {
     try {
         const { userId } = req.params;
+        // CRITICAL: prevent draining other users' wallets
+        if (userId !== req.user.uid) {
+            return res.status(403).json({ error: 'You can only withdraw from your own wallet' });
+        }
         const walletRef = db.collection('wallets').doc(userId);
         
         await db.runTransaction(async (t) => {
@@ -339,12 +490,23 @@ app.post('/api/wallets/:userId/withdraw', async (req, res) => {
     }
 });
 
-// --- SUBMIT SOLUTION ---
-app.post('/api/assignments/:id/submit', upload.single('solution'), async (req, res) => {
+// --- SUBMIT SOLUTION (only the assigned writer can submit) ---
+app.post('/api/assignments/:id/submit', requireAuth, upload.single('solution'), async (req, res) => {
     try {
+        const assignmentRef = db.collection('assignments').doc(req.params.id);
+        const snap = await assignmentRef.get();
+        if (!snap.exists) return res.status(404).json({ error: 'Assignment not found' });
+        const asn = snap.data();
+        if (asn.activeWriterId !== req.user.uid) {
+            return res.status(403).json({ error: 'Only the assigned writer can submit' });
+        }
+        if (asn.status !== 'ACTIVE') {
+            return res.status(400).json({ error: 'Can only submit active assignments' });
+        }
+
         let solutionData = {
             deliveredAt: new Date(),
-            notes: req.body.notes || ''
+            notes: (req.body.notes || '').trim()
         };
 
         if (req.body.tracking) {
@@ -370,7 +532,7 @@ app.post('/api/assignments/:id/submit', upload.single('solution'), async (req, r
             solutionData.mimetype = req.file.mimetype;
         }
 
-        await db.collection('assignments').doc(req.params.id).update({
+        await assignmentRef.update({
             solution: solutionData,
             status: 'REVIEW'
         });
@@ -380,14 +542,17 @@ app.post('/api/assignments/:id/submit', upload.single('solution'), async (req, r
     }
 });
 
-// --- SECURE DOWNLOAD ENDPOINT ---
-app.get('/api/assignments/:id/download', async (req, res) => {
+// --- SECURE DOWNLOAD ENDPOINT (only seeker or assigned writer can download) ---
+app.get('/api/assignments/:id/download', requireAuth, async (req, res) => {
     try {
         const assignmentRef = db.collection('assignments').doc(req.params.id);
         const doc = await assignmentRef.get();
         if (!doc.exists) return res.status(404).send('Not found');
         
         const job = doc.data();
+        if (job.seekerId !== req.user.uid && job.activeWriterId !== req.user.uid) {
+            return res.status(403).send('Forbidden');
+        }
         if (!job.solution || !job.solution.storagePath) {
             return res.status(400).send('No file delivered yet');
         }
@@ -404,16 +569,21 @@ app.get('/api/assignments/:id/download', async (req, res) => {
     }
 });
 
-// --- DISPUTE SYSTEM ---
-app.post('/api/assignments/:id/dispute', async (req, res) => {
+// --- DISPUTE SYSTEM (only seeker or assigned writer can dispute) ---
+app.post('/api/assignments/:id/dispute', requireAuth, async (req, res) => {
     try {
         const { reason } = req.body;
+        if (!reason || reason.trim().length < 10) {
+            return res.status(400).json({ error: 'Dispute reason required (min 10 chars)' });
+        }
         const assignmentRef = db.collection('assignments').doc(req.params.id);
         const snap = await assignmentRef.get();
         if (!snap.exists) return res.status(404).json({ error: 'Assignment not found' });
         
         const assignment = snap.data();
-
+        if (assignment.seekerId !== req.user.uid && assignment.activeWriterId !== req.user.uid) {
+            return res.status(403).json({ error: 'Only the seeker or writer can dispute' });
+        }
         if (assignment.status !== 'REVIEW' && assignment.status !== 'ACTIVE') {
             return res.status(400).json({ error: 'Only active or reviewed projects can be disputed' });
         }
@@ -438,8 +608,8 @@ app.post('/api/assignments/:id/dispute', async (req, res) => {
     }
 });
 
-// --- AI SUPPORT CHAT ---
-app.post('/api/support/chat', async (req, res) => {
+// --- AI SUPPORT CHAT (rate-limited & authenticated to prevent quota abuse) ---
+app.post('/api/support/chat', aiLimiter, requireAuth, async (req, res) => {
     try {
         const { message, history = [] } = req.body;
         
@@ -483,13 +653,20 @@ app.post('/api/support/chat', async (req, res) => {
     }
 });
 
-// --- ADMIN EVENTS ---
-
-app.get('/api/events', (req, res) => {
-    res.json([
-        { id: 1, service: 'PAYMENT', description: 'Escrow Locked: Order #442', status: 'SUCCESS' },
-        { id: 2, service: 'AUTH', description: 'User Verified: Sarah Jenkins', status: 'SUCCESS' }
-    ]);
+// --- ADMIN EVENTS (reads from real events collection; admin-only) ---
+app.get('/api/events', requireAuth, async (req, res) => {
+    try {
+        // Verify admin role
+        const userDoc = await db.collection('users').doc(req.user.uid).get();
+        if (!userDoc.exists || userDoc.data().role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+        const snap = await db.collection('events').orderBy('timestamp', 'desc').limit(50).get();
+        res.json(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (err) {
+        console.error('Events error:', err.message);
+        res.status(500).json({ error: 'Could not fetch events' });
+    }
 });
 
 const PORT = process.env.PORT || 5001;

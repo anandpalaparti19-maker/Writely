@@ -484,9 +484,8 @@
             if (!reason) return;
             
             try {
-                const response = await fetch(`${Writely.API_URL}/assignments/${assignmentId}/dispute`, {
+                const response = await Writely.apiFetch(`/assignments/${assignmentId}/dispute`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ reason })
                 });
                 if (response.ok) {

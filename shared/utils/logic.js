@@ -40,10 +40,47 @@ const Writely = {
     ) 
         ? `http://${window.location.hostname || 'localhost'}:5001/api` 
         : 'https://writely-55q5.onrender.com/api',
-    
+
+    /**
+     * Authenticated fetch helper — attaches the current user's Firebase ID token
+     * to every request. Auto-redirects to login on 401.
+     *
+     * Usage: Writely.apiFetch('/assignments', { method: 'POST', body: JSON.stringify(x) })
+     */
+    apiFetch: async function(path, options = {}) {
+        const url = `${this.API_URL}${path.startsWith('/') ? path : '/' + path}`;
+        const headers = { ...(options.headers || {}) };
+
+        // Attach ID token when a user is signed in
+        try {
+            const user = firebase.auth().currentUser;
+            if (user) {
+                const token = await user.getIdToken();
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+        } catch (e) { /* no user / sdk not loaded */ }
+
+        // Set Content-Type automatically for JSON payloads (unless it's FormData)
+        if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) {
+            headers['Content-Type'] = 'application/json';
+        }
+
+        const response = await fetch(url, { ...options, headers });
+
+        if (response.status === 401) {
+            console.warn('Auth expired — redirecting to login');
+            // Only auto-redirect on actual pages, not from admin.html etc on first load
+            if (!window.location.pathname.endsWith('index.html') && !window.location.pathname.endsWith('/')) {
+                window.location.href = '/apps/seeker-web/index.html';
+            }
+        }
+        return response;
+    },
+
     fetchEvents: async function() {
         try {
-            const response = await fetch(`${this.API_URL}/events`);
+            const response = await this.apiFetch('/events');
+            if (!response.ok) return; // silently fail for non-admins
             this.events = await response.json();
             this.updateAdminUI();
         } catch (err) { console.error('API Sync Failed:', err); }
@@ -172,7 +209,7 @@ Writely.uploadProfilePhoto = async function(file) {
 
 Writely.getJobFeed = async function() {
     try {
-        const response = await fetch(`${this.API_URL}/assignments`);
+        const response = await this.apiFetch('/assignments');
         if (!response.ok) throw new Error("Failed to fetch jobs");
         return await response.json();
     } catch (err) {
@@ -183,9 +220,8 @@ Writely.getJobFeed = async function() {
 
 Writely.submitBid = async function(assignmentId, bidData) {
     try {
-        const response = await fetch(`${this.API_URL}/assignments/${assignmentId}/bid`, {
+        const response = await this.apiFetch(`/assignments/${assignmentId}/bid`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(bidData)
         });
         return await response.json();
@@ -197,9 +233,8 @@ Writely.submitBid = async function(assignmentId, bidData) {
 
 Writely.assignWriter = async function(assignmentId, writerId) {
     try {
-        const response = await fetch(`${this.API_URL}/assignments/${assignmentId}/assign`, {
+        const response = await this.apiFetch(`/assignments/${assignmentId}/assign`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ writerId })
         });
         return await response.json();
@@ -211,7 +246,7 @@ Writely.assignWriter = async function(assignmentId, writerId) {
 
 Writely.createAssignment = async function(formData) {
     try {
-        const response = await fetch(`${this.API_URL}/assignments`, {
+        const response = await this.apiFetch('/assignments', {
             method: 'POST',
             body: formData
         });
@@ -226,12 +261,11 @@ Writely.buySubscription = async function() {
     const user = firebase.auth().currentUser;
     if (!user) throw new Error("Please login first");
     
-    const configRes = await fetch(`${this.API_URL}/payments/razorpay/config`);
+    const configRes = await this.apiFetch('/payments/razorpay/config');
     const { keyId } = await configRes.json();
 
-    const response = await fetch(`${this.API_URL}/payments/razorpay/create-order`, {
+    const response = await this.apiFetch('/payments/razorpay/create-order', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount: 120 })
     });
     const order = await response.json();
@@ -247,10 +281,10 @@ Writely.buySubscription = async function() {
             order_id: order.id,
             handler: async function (res) {
                 try {
-                    const verifyResponse = await fetch(`${Writely.API_URL}/payments/razorpay/verify`, {
+                    const verifyResponse = await Writely.apiFetch('/payments/razorpay/verify', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
+                            planType: 'SEEKER_PASS',
                             razorpay_order_id: res.razorpay_order_id,
                             razorpay_payment_id: res.razorpay_payment_id,
                             razorpay_signature: res.razorpay_signature,
@@ -280,9 +314,8 @@ Writely.buyWriterSubscription = async function() {
     const user = firebase.auth().currentUser;
     if (!user) throw new Error("Please login first");
     
-    const response = await fetch(`${this.API_URL}/payments/razorpay/create-order`, {
+    const response = await this.apiFetch('/payments/razorpay/create-order', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount: 30 })
     });
     const order = await response.json();
@@ -307,7 +340,15 @@ Writely.buyWriterSubscription = async function() {
                             expiresAt: firebase.firestore.Timestamp.fromDate(endDate)
                         }
                     });
-                    await fetch(`${Writely.API_URL}/payments/razorpay/verify`, { method: 'POST' });
+                    await Writely.apiFetch('/payments/razorpay/verify', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            planType: 'WRITER_ZERO_FEE',
+                            razorpay_order_id: order.id,
+                            razorpay_payment_id: res.razorpay_payment_id,
+                            razorpay_signature: res.razorpay_signature
+                        })
+                    });
                     resolve(endDate);
                 } catch (err) { reject(err); }
             },
@@ -382,9 +423,8 @@ window.askAI = async function() {
     document.getElementById('aiMessages').appendChild(typingMsg);
 
     try {
-        const response = await fetch(`${Writely.API_URL}/support/chat`, {
+        const response = await Writely.apiFetch('/support/chat', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ message: text, history: chatHistory.slice(-6) })
         });
         const data = await response.json();

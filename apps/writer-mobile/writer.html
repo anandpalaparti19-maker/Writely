@@ -496,7 +496,7 @@
             btn.disabled = true;
 
             try {
-                const response = await fetch(`http://localhost:5001/api/assignments/${id}/submit`, {
+                const response = await Writely.apiFetch(`/assignments/${id}/submit`, {
                     method: 'POST',
                     body: formData
                 });

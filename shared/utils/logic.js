@@ -127,11 +127,23 @@ window.registerUser = async function(event) {
             collegeName: collegeName,
             phoneNumber: phoneNumber,
             role: role,
+            emailVerified: false,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             metrics: { totalSpent: 0, activeOrders: 0 }
         });
 
-        alert("Account created successfully!");
+        // Send Firebase verification + welcome email to the registered address
+        try {
+            await user.sendEmailVerification({
+                url: `${window.location.origin}/apps/seeker-web/index.html`,
+                handleCodeInApp: false
+            });
+            console.log("✅ Verification email sent to", user.email);
+        } catch (mailErr) {
+            console.warn("Email send failed (non-fatal):", mailErr.message);
+        }
+
+        alert(`Account created! 📧 We've sent a verification email to ${user.email}. Please check your inbox (and spam folder).`);
         if (role === 'WRITER') {
             window.location.href = window.location.pathname.includes('seeker-web') ? '../writer-mobile/writer.html' : 'writer.html';
         } else {

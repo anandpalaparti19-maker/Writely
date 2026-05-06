@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import rateLimit from 'express-rate-limit';
-import Razorpay from 'razorpay';
+import axios from 'axios';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 import { admin, db, bucket } from './firebase.js';
@@ -21,9 +21,24 @@ const ai = genkit({
 
 const FieldValue = admin.firestore.FieldValue;
 
-const razorpay = new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_mock',
-    key_secret: process.env.RAZORPAY_KEY_SECRET || 'rzp_test_secret_mock'
+// --- CASHFREE PAYMENT GATEWAY ---
+const CASHFREE_APP_ID = process.env.CASHFREE_APP_ID || 'TEST_APP_ID';
+const CASHFREE_SECRET = process.env.CASHFREE_SECRET_KEY || 'TEST_SECRET';
+const CASHFREE_ENV = (process.env.CASHFREE_ENV || 'TEST').toUpperCase(); // TEST | PROD
+const CASHFREE_BASE_URL = CASHFREE_ENV === 'PROD'
+    ? 'https://api.cashfree.com/pg'
+    : 'https://sandbox.cashfree.com/pg';
+const CASHFREE_API_VERSION = '2023-08-01';
+
+const cashfreeClient = axios.create({
+    baseURL: CASHFREE_BASE_URL,
+    headers: {
+        'x-api-version': CASHFREE_API_VERSION,
+        'x-client-id': CASHFREE_APP_ID,
+        'x-client-secret': CASHFREE_SECRET,
+        'Content-Type': 'application/json'
+    },
+    timeout: 15000
 });
 
 // File uploads: max 10MB, 5 files, only common document/image mimetypes
@@ -108,43 +123,85 @@ app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISO
 
 console.log('✅ Writely API Gateway (Firebase Admin) Starting...');
 
-// --- RAZORPAY ---
-app.get('/api/payments/razorpay/config', (req, res) => {
-    res.json({ keyId: process.env.RAZORPAY_KEY_ID || 'rzp_test_mock' });
+// --- CASHFREE PAYMENTS ---
+// Public config endpoint — frontend needs the App ID + environment to init Cashfree.js
+app.get('/api/payments/cashfree/config', (req, res) => {
+    res.json({
+        appId: CASHFREE_APP_ID,
+        mode: CASHFREE_ENV === 'PROD' ? 'production' : 'sandbox'
+    });
 });
 
-app.post('/api/payments/razorpay/create-order', paymentLimiter, requireAuth, async (req, res) => {
+// Create a Cashfree order — returns payment_session_id used by Cashfree.js drop-in
+app.post('/api/payments/cashfree/create-order', paymentLimiter, requireAuth, async (req, res) => {
     try {
-        const { amount, currency = "INR" } = req.body;
+        const { amount, currency = 'INR' } = req.body;
         const numAmount = Number(amount);
         if (!Number.isFinite(numAmount) || numAmount <= 0 || numAmount > 100000) {
             return res.status(400).json({ error: 'Invalid amount (must be 1–100000)' });
         }
-        const order = await razorpay.orders.create({
-            amount: Math.round(numAmount * 100),
-            currency,
-            receipt: `rcpt_${req.user.uid.substring(0, 8)}_${Date.now()}`
+
+        // Cashfree requires customer phone. Pull from user's Firestore profile, fall back to a test number.
+        let customerPhone = '9999999999';
+        let customerEmail = req.user.email || 'noreply@writely.app';
+        try {
+            const userSnap = await db.collection('users').doc(req.user.uid).get();
+            if (userSnap.exists) {
+                const u = userSnap.data();
+                if (u.phoneNumber && /^\d{10}$/.test(String(u.phoneNumber).replace(/\D/g, '').slice(-10))) {
+                    customerPhone = String(u.phoneNumber).replace(/\D/g, '').slice(-10);
+                }
+                if (u.email) customerEmail = u.email;
+            }
+        } catch (_) { /* non-fatal */ }
+
+        const orderId = `wr_${req.user.uid.substring(0, 8)}_${Date.now()}`;
+        const payload = {
+            order_id: orderId,
+            order_amount: Math.round(numAmount * 100) / 100,
+            order_currency: currency,
+            customer_details: {
+                customer_id: req.user.uid,
+                customer_email: customerEmail,
+                customer_phone: customerPhone
+            },
+            order_meta: {
+                // Cashfree will POST here after payment; we still verify server-side on /verify
+                notify_url: ''
+            }
+        };
+
+        const { data } = await cashfreeClient.post('/orders', payload);
+        // Return only what the frontend needs
+        res.json({
+            order_id: data.order_id,
+            payment_session_id: data.payment_session_id,
+            order_amount: data.order_amount,
+            order_currency: data.order_currency
         });
-        res.json(order);
     } catch (err) {
-        console.error('Create order error:', err.message);
+        const detail = err.response?.data || err.message;
+        console.error('Cashfree create order error:', detail);
         res.status(500).json({ error: 'Could not create order' });
     }
 });
 
-app.post('/api/payments/razorpay/verify', paymentLimiter, requireAuth, async (req, res) => {
+// Verify payment by querying Cashfree directly — never trust the client.
+// Frontend just sends { order_id, planType }; we call Cashfree to confirm PAID status.
+app.post('/api/payments/cashfree/verify', paymentLimiter, requireAuth, async (req, res) => {
     try {
-        const { razorpay_order_id, razorpay_payment_id, razorpay_signature, planType } = req.body;
-        if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-            return res.status(400).json({ error: 'Missing payment parameters' });
+        const { order_id, planType } = req.body;
+        if (!order_id || typeof order_id !== 'string') {
+            return res.status(400).json({ error: 'Missing order_id' });
+        }
+        // order_id format check — must match what we issued (prevents arbitrary lookups)
+        if (!order_id.startsWith(`wr_${req.user.uid.substring(0, 8)}_`)) {
+            return res.status(403).json({ error: 'Order does not belong to caller' });
         }
 
-        const secret = process.env.RAZORPAY_KEY_SECRET || 'rzp_test_secret_mock';
-        const body = `${razorpay_order_id}|${razorpay_payment_id}`;
-        const expectedSignature = crypto.createHmac('sha256', secret).update(body).digest('hex');
-
-        if (expectedSignature !== razorpay_signature) {
-            return res.status(400).json({ error: 'Invalid signature' });
+        const { data: order } = await cashfreeClient.get(`/orders/${encodeURIComponent(order_id)}`);
+        if (!order || order.order_status !== 'PAID') {
+            return res.status(400).json({ error: `Payment not completed (status: ${order?.order_status || 'unknown'})` });
         }
 
         // userId comes from the verified Firebase token — NOT from the request body (prevents spoofing)
@@ -165,13 +222,15 @@ app.post('/api/payments/razorpay/verify', paymentLimiter, requireAuth, async (re
             [subscriptionField]: {
                 type: subType,
                 expiresAt: admin.firestore.Timestamp.fromDate(endDate),
-                paymentId: razorpay_payment_id
+                paymentId: order_id,
+                cfReference: order.cf_order_id || null
             }
         });
 
         res.json({ status: 'success', message: 'Payment verified', expiresAt: endDate });
     } catch (err) {
-        console.error('Verify payment error:', err.message);
+        const detail = err.response?.data || err.message;
+        console.error('Cashfree verify error:', detail);
         res.status(500).json({ error: 'Verification failed' });
     }
 });

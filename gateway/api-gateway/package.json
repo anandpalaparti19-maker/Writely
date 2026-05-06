@@ -19,7 +19,6 @@
     "firebase-admin": "^13.8.0",
     "form-data": "^4.0.5",
     "genkit": "^1.33.0",
-    "multer": "^2.1.1",
-    "razorpay": "^2.9.6"
+    "multer": "^2.1.1"
   }
 }

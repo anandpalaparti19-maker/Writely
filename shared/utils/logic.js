@@ -269,107 +269,66 @@ Writely.createAssignment = async function(formData) {
     }
 };
 
-Writely.buySubscription = async function() {
+// --- CASHFREE PAYMENT HELPERS ---
+// Internal: opens the Cashfree.js drop-in checkout for a given order, then verifies on the server.
+Writely._cashfreePay = async function({ amount, planType, description }) {
     const user = firebase.auth().currentUser;
     if (!user) throw new Error("Please login first");
-    
-    const configRes = await this.apiFetch('/payments/razorpay/config');
-    const { keyId } = await configRes.json();
 
-    const response = await this.apiFetch('/payments/razorpay/create-order', {
+    if (typeof Cashfree !== 'function') {
+        throw new Error("Cashfree SDK not loaded. Make sure <script src='https://sdk.cashfree.com/js/v3/cashfree.js'> is included on this page.");
+    }
+
+    // 1. Get config (mode = sandbox/production)
+    const configRes = await this.apiFetch('/payments/cashfree/config');
+    if (!configRes.ok) throw new Error("Could not load payment config");
+    const { mode } = await configRes.json();
+
+    // 2. Create order on backend
+    const orderRes = await this.apiFetch('/payments/cashfree/create-order', {
         method: 'POST',
-        body: JSON.stringify({ amount: 120 })
+        body: JSON.stringify({ amount })
     });
-    const order = await response.json();
-    if (!order || !order.id) throw new Error("Failed to initialize payment");
+    const order = await orderRes.json();
+    if (!orderRes.ok || !order.payment_session_id) {
+        throw new Error(order.error || "Failed to initialize payment");
+    }
 
-    return new Promise((resolve, reject) => {
-        const options = {
-            key: keyId,
-            amount: order.amount,
-            currency: "INR",
-            name: "Writely",
-            description: "Seeker One-Day Delivery Pass",
-            order_id: order.id,
-            handler: async function (res) {
-                try {
-                    const verifyResponse = await Writely.apiFetch('/payments/razorpay/verify', {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            planType: 'SEEKER_PASS',
-                            razorpay_order_id: res.razorpay_order_id,
-                            razorpay_payment_id: res.razorpay_payment_id,
-                            razorpay_signature: res.razorpay_signature,
-                            userId: user.uid
-                        })
-                    });
+    // 3. Open Cashfree drop-in checkout (modal)
+    const cashfree = Cashfree({ mode: mode || 'sandbox' });
+    const result = await cashfree.checkout({
+        paymentSessionId: order.payment_session_id,
+        redirectTarget: '_modal'
+    });
 
-                    const result = await verifyResponse.json();
-                    if (!verifyResponse.ok) throw new Error(result.error || "Payment verification failed");
-                    
-                    resolve(new Date(result.expiresAt));
-                } catch (err) {
-                    console.error("Payment Verification Error:", err);
-                    reject(err);
-                }
-            },
-            prefill: { email: user.email },
-            theme: { color: "#6366F1" }
-        };
-        const rzp = new Razorpay(options);
-        rzp.on('payment.failed', function (response){ reject(new Error(response.error.description)); });
-        rzp.open();
+    if (result?.error) {
+        throw new Error(result.error.message || "Payment cancelled or failed");
+    }
+
+    // 4. Server-side verify by querying Cashfree directly
+    const verifyRes = await this.apiFetch('/payments/cashfree/verify', {
+        method: 'POST',
+        body: JSON.stringify({ order_id: order.order_id, planType })
+    });
+    const verifyData = await verifyRes.json();
+    if (!verifyRes.ok) throw new Error(verifyData.error || "Payment verification failed");
+
+    return new Date(verifyData.expiresAt);
+};
+
+Writely.buySubscription = async function() {
+    return this._cashfreePay({
+        amount: 120,
+        planType: 'SEEKER_PASS',
+        description: 'Seeker One-Day Delivery Pass'
     });
 };
 
 Writely.buyWriterSubscription = async function() {
-    const user = firebase.auth().currentUser;
-    if (!user) throw new Error("Please login first");
-    
-    const response = await this.apiFetch('/payments/razorpay/create-order', {
-        method: 'POST',
-        body: JSON.stringify({ amount: 30 })
-    });
-    const order = await response.json();
-    if (!order || !order.id) throw new Error("Failed to initialize payment");
-
-    return new Promise((resolve, reject) => {
-        const options = {
-            key: "rzp_test_mock",
-            amount: order.amount,
-            currency: "INR",
-            name: "Writely",
-            description: "Writer Zero-Fee Pass (24 Hours)",
-            order_id: order.id,
-            handler: async function (res) {
-                try {
-                    const endDate = new Date();
-                    endDate.setHours(endDate.getHours() + 24);
-                    
-                    await firebase.firestore().collection('users').doc(user.uid).update({
-                        writerSubscription: {
-                            type: 'ZERO_FEE_PASS',
-                            expiresAt: firebase.firestore.Timestamp.fromDate(endDate)
-                        }
-                    });
-                    await Writely.apiFetch('/payments/razorpay/verify', {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            planType: 'WRITER_ZERO_FEE',
-                            razorpay_order_id: order.id,
-                            razorpay_payment_id: res.razorpay_payment_id,
-                            razorpay_signature: res.razorpay_signature
-                        })
-                    });
-                    resolve(endDate);
-                } catch (err) { reject(err); }
-            },
-            prefill: { email: user.email },
-            theme: { color: "#10B981" }
-        };
-        const rzp = new Razorpay(options);
-        rzp.on('payment.failed', function (response){ reject(new Error(response.error.description)); });
-        rzp.open();
+    return this._cashfreePay({
+        amount: 30,
+        planType: 'WRITER_ZERO_FEE',
+        description: 'Writer Zero-Fee Pass (24 Hours)'
     });
 };
 

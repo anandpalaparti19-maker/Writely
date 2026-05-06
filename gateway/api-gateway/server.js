@@ -83,8 +83,10 @@ const app = express();
 
 // --- CORS: restrict to trusted origins ---
 const allowedOriginPatterns = [
-    /^https:\/\/([a-z0-9-]+\.)?netlify\.app$/i,   // any netlify subdomain (deploy previews too)
+    /^https:\/\/([a-z0-9-]+\.)?netlify\.app$/i,        // any netlify subdomain (deploy previews too)
     /^https:\/\/([a-z0-9-]+\.)?onrender\.com$/i,
+    /^https:\/\/([a-z0-9-]+\.)?web\.app$/i,            // Firebase Hosting (writely-304a8.web.app)
+    /^https:\/\/([a-z0-9-]+\.)?firebaseapp\.com$/i,    // Firebase Hosting alt domain
     /^http:\/\/localhost(:\d+)?$/i,
     /^http:\/\/127\.0\.0\.1(:\d+)?$/i,
     /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/i

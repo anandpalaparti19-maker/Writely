@@ -2,5 +2,83 @@
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "firestore.rules",
+      "firestore.indexes.json",
+      "**/.*",
+      "**/node_modules/**",
+      "gateway/**",
+      "services/**",
+      "infra/**",
+      "messaging/**",
+      "integrations/**",
+      "scratch/**",
+      "data/**",
+      "docs/**",
+      "scripts/**",
+      "packages/**",
+      ".turbo/**",
+      ".kilocode/**",
+      ".qodo/**",
+      "*.md",
+      "*.toml",
+      "*.bat",
+      "remove_space.js",
+      "rename.js",
+      "render.yaml",
+      "package.json",
+      "package-lock.json",
+      "pnpm-workspace.yaml",
+      "turbo.json",
+      "firestore_schema.json",
+      "assignhub_system_architecture.html",
+      "assignment_platform_architecture.svg",
+      "rapido_system_architecture_payments.html",
+      "rapido_system_architecture.svg",
+      "Screenshot*.png"
+    ],
+    "redirects": [
+      { "source": "/seeker/**", "destination": "/apps/seeker-web/:splat", "type": 301 },
+      { "source": "/writer/**", "destination": "/apps/writer-mobile/:splat", "type": 301 }
+    ],
+    "rewrites": [
+      { "source": "/", "destination": "/apps/seeker-web/index.html" }
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+          { "key": "X-Content-Type-Options", "value": "nosniff" },
+          { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+          { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(self)" }
+        ]
+      },
+      {
+        "source": "/manifest.webmanifest",
+        "headers": [
+          { "key": "Content-Type", "value": "application/manifest+json" },
+          { "key": "Cache-Control", "value": "public, max-age=3600" }
+        ]
+      },
+      {
+        "source": "/sw.js",
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" },
+          { "key": "Service-Worker-Allowed", "value": "/" }
+        ]
+      },
+      {
+        "source": "**/*.@(jpg|jpeg|png|gif|webp|svg|ico|woff|woff2|ttf|otf|eot)",
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=2592000" }
+        ]
+      }
+    ]
   }
 }
+

@@ -11,6 +11,26 @@ import { googleAI } from '@genkit-ai/googleai';
 
 dotenv.config();
 
+// --- Sentry (optional) — enabled only if SENTRY_DSN env var is set ---
+// Doesn't bloat the app at all in dev; in prod it captures all unhandled errors.
+let Sentry = null;
+if (process.env.SENTRY_DSN) {
+    try {
+        const sentryModule = await import('@sentry/node');
+        Sentry = sentryModule;
+        Sentry.init({
+            dsn: process.env.SENTRY_DSN,
+            environment: process.env.NODE_ENV || 'production',
+            tracesSampleRate: 0.1,
+            // Don't capture user's request bodies (PII / payment data)
+            sendDefaultPii: false
+        });
+        console.log('🛡️  Sentry initialized');
+    } catch (e) {
+        console.warn('Sentry SDK not installed — run `npm i @sentry/node` to enable monitoring.');
+    }
+}
+
 // Initialize Genkit
 console.log('🔑 Using Google GenAI Key:', process.env.GOOGLE_GENAI_API_KEY ? `${process.env.GOOGLE_GENAI_API_KEY.substring(0, 8)}...` : 'MISSING');
 const ai = genkit({
@@ -678,25 +698,36 @@ app.post('/api/assignments', requireAuth, upload.array('attachments', 5), async 
     }
 });
 
-// --- GET JOB FEED (public list of POSTED jobs; only writers care, but open is fine) ---
+// --- GET JOB FEED (paginated, sorted newest-first) ---
+// Query: ?limit=20&after=<assignmentId>   (cursor pagination — no offset, scales infinitely)
+// Returns: { jobs: [...], nextCursor: <id|null> }
 app.get('/api/assignments', requireAuth, async (req, res) => {
     try {
-        const snapshot = await db.collection('assignments')
-            .where('status', '==', 'POSTED')
-            .get();
+        const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
+        const afterId = req.query.after;
 
-        const jobs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
-        // Sort in memory to avoid Firestore Composite Index requirements
-        jobs.sort((a, b) => {
-            const timeA = a.createdAt ? a.createdAt.toMillis() : 0;
-            const timeB = b.createdAt ? b.createdAt.toMillis() : 0;
-            return timeB - timeA; // Descending
+        let query = db.collection('assignments')
+            .where('status', 'in', ['POSTED', 'BIDDING'])
+            .orderBy('createdAt', 'desc');
+
+        // Cursor: continue after a specific assignment doc
+        if (afterId) {
+            const afterDoc = await db.collection('assignments').doc(String(afterId)).get();
+            if (afterDoc.exists) query = query.startAfter(afterDoc);
+        }
+
+        const snap = await query.limit(limit + 1).get(); // fetch one extra to know if there's a next page
+        const docs = snap.docs;
+        const hasMore = docs.length > limit;
+        const pageDocs = hasMore ? docs.slice(0, limit) : docs;
+
+        res.json({
+            jobs: pageDocs.map(d => ({ id: d.id, ...d.data() })),
+            nextCursor: hasMore ? pageDocs[pageDocs.length - 1].id : null
         });
-
-        res.json(jobs);
     } catch (err) {
         console.error('❌ Query failed:', err.message);
+        // If Firestore demands a composite index, the message will tell you the link to create one.
         res.status(500).json({ error: err.message });
     }
 });
@@ -1197,6 +1228,27 @@ app.get('/api/events', requireAuth, async (req, res) => {
     } catch (err) {
         console.error('Events error:', err.message);
         res.status(500).json({ error: 'Could not fetch events' });
+    }
+});
+
+// --- GLOBAL ERROR HANDLER (last middleware — catches anything not handled above) ---
+// Sends to Sentry if configured, then returns a generic 500 to the client
+// (never leak stack traces / internals).
+app.use((err, req, res, _next) => {
+    console.error('Unhandled error:', err);
+    if (Sentry) {
+        try { Sentry.captureException(err); } catch (_) { /* noop */ }
+    }
+    res.status(err.status || 500).json({
+        error: err.expose ? err.message : 'Internal server error'
+    });
+});
+
+// Last-resort safety net: log uncaught promises so Render logs surface them
+process.on('unhandledRejection', (reason) => {
+    console.error('UnhandledRejection:', reason);
+    if (Sentry) {
+        try { Sentry.captureException(reason instanceof Error ? reason : new Error(String(reason))); } catch (_) {}
     }
 });
 

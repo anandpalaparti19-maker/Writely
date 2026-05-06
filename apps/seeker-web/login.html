@@ -61,6 +61,9 @@
                 <label>Password</label>
                 <input type="password" id="password" placeholder="••••••••" required>
             </div>
+            <div style="text-align:right; margin-top:-12px; margin-bottom:20px;">
+                <a href="#" onclick="sendPasswordReset(event)" style="font-size:13px; color:var(--ink-purple); font-weight:600; text-decoration:none;">Forgot password?</a>
+            </div>
             <button type="submit" class="btn btn-primary" style="width:100%; padding:18px;">Sign In</button>
         </form>
         
@@ -68,5 +71,26 @@
             Don't have an account? <a href="register.html" style="color:var(--ink-purple); font-weight:600; text-decoration:none;">Sign up</a>
         </p>
     </div>
+    <script>
+        async function sendPasswordReset(e) {
+            if (e) e.preventDefault();
+            const emailEl = document.getElementById('email');
+            const email = (emailEl?.value || '').trim();
+            if (!email) {
+                alert('Please enter your email above first, then click "Forgot password?".');
+                emailEl?.focus();
+                return;
+            }
+            try {
+                await firebase.auth().sendPasswordResetEmail(email, {
+                    url: `${window.location.origin}/apps/seeker-web/login.html`,
+                    handleCodeInApp: false
+                });
+                alert(`📧 Password reset link sent to ${email}.\n\nCheck your inbox (and spam folder).`);
+            } catch (err) {
+                alert('Could not send reset email: ' + (err.message || err));
+            }
+        }
+    </script>
 </body>
 </html>

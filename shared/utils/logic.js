@@ -219,14 +219,27 @@ Writely.uploadProfilePhoto = async function(file) {
     return photoUrl;
 };
 
-Writely.getJobFeed = async function() {
+// Get a single page of jobs (default 20). Returns just the array for backward compat.
+// For pagination, use getJobFeedPage({ after: '<id>' }) → { jobs, nextCursor }.
+Writely.getJobFeed = async function(opts = {}) {
+    const page = await this.getJobFeedPage(opts);
+    return page.jobs;
+};
+
+Writely.getJobFeedPage = async function({ limit = 20, after = null } = {}) {
+    const params = new URLSearchParams();
+    params.set('limit', String(limit));
+    if (after) params.set('after', after);
     try {
-        const response = await this.apiFetch('/assignments');
+        const response = await this.apiFetch(`/assignments?${params.toString()}`);
         if (!response.ok) throw new Error("Failed to fetch jobs");
-        return await response.json();
+        const data = await response.json();
+        // Backward compat: old endpoint returned a bare array
+        if (Array.isArray(data)) return { jobs: data, nextCursor: null };
+        return data; // { jobs, nextCursor }
     } catch (err) {
         console.error("Job Feed Error:", err);
-        return [];
+        return { jobs: [], nextCursor: null };
     }
 };
 

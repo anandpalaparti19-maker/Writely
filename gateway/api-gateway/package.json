@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.28.0",
+    "@sentry/node": "^10.51.0",
     "axios": "^1.15.2",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",

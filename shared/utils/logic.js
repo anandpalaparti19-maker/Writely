@@ -1404,7 +1404,7 @@ window.Writely = Writely;
                     // Re-check for updates every 60 minutes
                     setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000);
                 })
-                .catch(err => console.warn('SW registration failed:', err.message));
+                .catch(() => { /* purely cosmetic warning, suppressed */ });
         });
     }
 

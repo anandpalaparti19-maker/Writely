@@ -2,11 +2,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper: Check if user is an admin (optional, for future)
-    function isAdmin() {
-      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
-    }
-
     // --- USER PROFILES ---
     match /users/{userId} {
       // Users can only read their own profile or public profiles (if needed)
@@ -64,9 +59,10 @@ service cloud.firestore {
 
     // --- MESSAGES ---
     match /messages/{messageId} {
-      // Users can only read messages where they are the sender or the project is theirs
+      // Users can only read messages where they are the sender, receiver, or the project is theirs
       allow read: if request.auth != null && (
         resource.data.senderId == request.auth.uid || 
+        resource.data.receiverId == request.auth.uid || 
         get(/databases/$(database)/documents/assignments/$(resource.data.assignmentId)).data.seekerId == request.auth.uid ||
         get(/databases/$(database)/documents/assignments/$(resource.data.assignmentId)).data.activeWriterId == request.auth.uid
       );

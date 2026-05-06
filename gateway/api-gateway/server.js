@@ -650,7 +650,7 @@ app.post('/api/assignments/:id/release', requireAuth, async (req, res) => {
 // --- CREATE ASSIGNMENT ---
 app.post('/api/assignments', requireAuth, upload.array('attachments', 5), async (req, res) => {
     try {
-        const { title, description, budget, pages, deliveryMethod, deliveryAddress } = req.body;
+        const { title, description, budget, pages, deliveryMethod, deliveryAddress, pincode, city } = req.body;
 
         // Validate
         if (!title || title.trim().length < 3) return res.status(400).json({ error: 'Title required (min 3 chars)' });
@@ -678,6 +678,10 @@ app.post('/api/assignments', requireAuth, upload.array('attachments', 5), async 
             }
         }
 
+        // Normalise location fields — pincode is a 6-digit string in India
+        const cleanPincode = String(pincode || '').replace(/\D/g, '').slice(0, 6);
+        const cleanCity = String(city || '').trim().slice(0, 80);
+
         const docRef = await db.collection('assignments').add({
             title: title.trim(),
             description: description.trim(),
@@ -687,6 +691,8 @@ app.post('/api/assignments', requireAuth, upload.array('attachments', 5), async 
             status: 'POSTED',
             deliveryMethod: deliveryMethod || 'Digital',
             deliveryAddress: (deliveryAddress || '').trim(),
+            pincode: cleanPincode || null,                      // e.g. "110001"
+            city: cleanCity ? cleanCity.toLowerCase() : null,    // normalised lowercase for matching
             attachments,
             createdAt: FieldValue.serverTimestamp()
         });
@@ -698,17 +704,32 @@ app.post('/api/assignments', requireAuth, upload.array('attachments', 5), async 
     }
 });
 
-// --- GET JOB FEED (paginated, sorted newest-first) ---
-// Query: ?limit=20&after=<assignmentId>   (cursor pagination — no offset, scales infinitely)
-// Returns: { jobs: [...], nextCursor: <id|null> }
+// --- GET JOB FEED (paginated, location-aware) ---
+// Query params:
+//   ?limit=20                      number of jobs per page (1–50)
+//   ?after=<assignmentId>          cursor for pagination
+//   ?scope=nearby|city|all         filter by writer's location (default: all)
+//   ?pincode=110001&city=delhi     writer's location (read by scope filter)
+// Returns: { jobs: [...], nextCursor: <id|null>, scope }
 app.get('/api/assignments', requireAuth, async (req, res) => {
     try {
         const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
         const afterId = req.query.after;
+        const scope = ['nearby', 'city', 'all'].includes(req.query.scope) ? req.query.scope : 'all';
+        const pincode = String(req.query.pincode || '').replace(/\D/g, '').slice(0, 6) || null;
+        const cityRaw = String(req.query.city || '').trim().toLowerCase().slice(0, 80) || null;
 
         let query = db.collection('assignments')
-            .where('status', 'in', ['POSTED', 'BIDDING'])
-            .orderBy('createdAt', 'desc');
+            .where('status', 'in', ['POSTED', 'BIDDING']);
+
+        // Apply location filter BEFORE orderBy (Firestore composite-index friendly)
+        if (scope === 'nearby' && pincode) {
+            query = query.where('pincode', '==', pincode);
+        } else if (scope === 'city' && cityRaw) {
+            query = query.where('city', '==', cityRaw);
+        }
+
+        query = query.orderBy('createdAt', 'desc');
 
         // Cursor: continue after a specific assignment doc
         if (afterId) {
@@ -716,18 +737,28 @@ app.get('/api/assignments', requireAuth, async (req, res) => {
             if (afterDoc.exists) query = query.startAfter(afterDoc);
         }
 
-        const snap = await query.limit(limit + 1).get(); // fetch one extra to know if there's a next page
+        const snap = await query.limit(limit + 1).get();
         const docs = snap.docs;
         const hasMore = docs.length > limit;
         const pageDocs = hasMore ? docs.slice(0, limit) : docs;
 
+        // Annotate each job with a proximity tag so the writer's UI can show a badge.
+        const jobs = pageDocs.map(d => {
+            const data = d.data();
+            let proximity = 'other';
+            if (pincode && data.pincode === pincode) proximity = 'same_pincode';
+            else if (cityRaw && data.city === cityRaw) proximity = 'same_city';
+            return { id: d.id, ...data, proximity };
+        });
+
         res.json({
-            jobs: pageDocs.map(d => ({ id: d.id, ...d.data() })),
-            nextCursor: hasMore ? pageDocs[pageDocs.length - 1].id : null
+            jobs,
+            nextCursor: hasMore ? pageDocs[pageDocs.length - 1].id : null,
+            scope
         });
     } catch (err) {
         console.error('❌ Query failed:', err.message);
-        // If Firestore demands a composite index, the message will tell you the link to create one.
+        // If Firestore demands a composite index, the error message will include a click-to-create link.
         res.status(500).json({ error: err.message });
     }
 });

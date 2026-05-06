@@ -110,9 +110,19 @@ window.registerUser = async function(event) {
     const password = document.getElementById('password').value;
     const collegeEl = document.getElementById('collegeName');
     const phoneEl = document.getElementById('phoneNumber');
+    const cityEl = document.getElementById('city');
+    const pincodeEl = document.getElementById('pincode');
     const collegeName = collegeEl ? collegeEl.value : '';
     const phoneNumber = phoneEl ? phoneEl.value : '';
+    const city = cityEl ? cityEl.value.trim() : '';
+    const pincode = pincodeEl ? String(pincodeEl.value).replace(/\D/g, '').slice(0, 6) : '';
     const role = (typeof selectedRole !== 'undefined' ? selectedRole : 'seeker').toUpperCase();
+
+    // Pincode validation — must be exactly 6 digits if provided
+    if (pincodeEl && pincode.length !== 6) {
+        alert('Please enter a valid 6-digit Indian pincode');
+        return;
+    }
 
     try {
         if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = "Creating account..."; }
@@ -126,6 +136,10 @@ window.registerUser = async function(event) {
             fullName: fullName,
             collegeName: collegeName,
             phoneNumber: phoneNumber,
+            // Location — used for nearby-job matching (Rapido-style)
+            city: city,                                      // e.g. "Delhi" (display)
+            cityNormalized: city ? city.toLowerCase() : '',  // for case-insensitive match queries
+            pincode: pincode || null,                        // e.g. "110001"
             role: role,
             emailVerified: false,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),

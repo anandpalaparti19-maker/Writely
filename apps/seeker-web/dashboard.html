@@ -208,6 +208,29 @@
                             <textarea name="deliveryAddress" id="deliveryAddress" rows="2" style="width:100%; padding:14px; border-radius:12px; border:1px solid var(--border);" placeholder="Enter your full shipping address for the courier..."></textarea>
                         </div>
 
+                        <!-- LOCATION (always required — drives nearby-writer matching) -->
+                        <div style="display:grid; grid-template-columns:1.4fr 1fr; gap:12px; margin-bottom:20px;">
+                            <div>
+                                <label style="display:block; font-size:12px; font-weight:700; color:var(--text-tertiary); margin-bottom:8px; text-transform:uppercase;">City</label>
+                                <input type="text" name="city" id="postCity" list="postCityList" placeholder="e.g. Delhi" style="width:100%; padding:14px; border-radius:12px; border:1px solid var(--border);" required>
+                                <datalist id="postCityList">
+                                    <option value="Delhi"><option value="Mumbai"><option value="Bengaluru">
+                                    <option value="Hyderabad"><option value="Chennai"><option value="Kolkata">
+                                    <option value="Pune"><option value="Ahmedabad"><option value="Jaipur">
+                                    <option value="Lucknow"><option value="Chandigarh"><option value="Indore">
+                                    <option value="Bhopal"><option value="Patna"><option value="Kochi">
+                                    <option value="Coimbatore"><option value="Visakhapatnam"><option value="Surat">
+                                    <option value="Nagpur"><option value="Vadodara"><option value="Guwahati">
+                                    <option value="Bhubaneswar"><option value="Thiruvananthapuram">
+                                </datalist>
+                            </div>
+                            <div>
+                                <label style="display:block; font-size:12px; font-weight:700; color:var(--text-tertiary); margin-bottom:8px; text-transform:uppercase;">Pincode</label>
+                                <input type="text" name="pincode" id="postPincode" placeholder="110001" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" style="width:100%; padding:14px; border-radius:12px; border:1px solid var(--border);" required>
+                            </div>
+                        </div>
+                        <p style="font-size:12px; color:var(--text-tertiary); margin: -12px 0 16px;">📍 We'll show this assignment to writers in your area first.</p>
+
                         <div style="margin-bottom:20px;">
                             <label style="display:block; font-size:12px; font-weight:700; color:var(--text-tertiary); margin-bottom:8px; text-transform:uppercase;">Attachments (PDF/Docs)</label>
                             <input type="file" name="attachments" multiple style="width:100%; padding:14px; border-radius:12px; border:1px solid var(--border); background:#F9FAFB;">
@@ -286,9 +309,19 @@
     </div>
 
     <script>
-        function openModal() { 
+        async function openModal() { 
             document.getElementById('postJobModal').style.display = 'flex'; 
             calculateBudget();
+            // Pre-fill city + pincode from the seeker's saved profile so they don't retype
+            try {
+                const profile = await Writely.getUserProfile();
+                if (profile) {
+                    const cityEl = document.getElementById('postCity');
+                    const pinEl  = document.getElementById('postPincode');
+                    if (cityEl && !cityEl.value && profile.city) cityEl.value = profile.city;
+                    if (pinEl  && !pinEl.value  && profile.pincode) pinEl.value = profile.pincode;
+                }
+            } catch (_) { /* non-critical — user can still type */ }
         }
         function closeModal() { document.getElementById('postJobModal').style.display = 'none'; }
 

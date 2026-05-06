@@ -180,14 +180,13 @@
                 <p style="color: var(--text-secondary);">Find the perfect assignment that matches your expertise.</p>
             </header>
 
-            <div class="filters-bar">
-                <div class="filter-pill active">All Categories</div>
-                <div class="filter-pill">Academic Writing</div>
-                <div class="filter-pill">Content Strategy</div>
-                <div class="filter-pill">Technical Documentation</div>
-                <div class="filter-pill">Proofreading</div>
-                <div class="filter-pill">Business Analysis</div>
+            <!-- Location-based scope tabs (Rapido-style) -->
+            <div class="filters-bar" style="margin-bottom:16px;">
+                <div class="filter-pill active" data-scope="nearby">📍 Nearby</div>
+                <div class="filter-pill" data-scope="city">🏙️ My City</div>
+                <div class="filter-pill" data-scope="all">🌐 All India</div>
             </div>
+            <p id="locationHint" style="font-size:12px; color:var(--text-tertiary); margin: -8px 0 24px;"></p>
 
             <div id="jobList">
                 <!-- Shimmer/Loading State -->
@@ -224,16 +223,68 @@
     </div>
 
     <script>
+        // Writer's location (loaded from their Firestore profile on auth)
+        let writerLocation = { pincode: '', city: '' };
+        let currentScope = 'nearby';
+
+        // Pretty label for the proximity badge on each job card
+        function proximityBadge(prox, jobCity) {
+            if (prox === 'same_pincode') return '<span class="filter-pill" style="font-size:11px; padding:4px 12px; background:#DCFCE7; color:#15803D; border-color:#86EFAC;">📍 Same Area</span>';
+            if (prox === 'same_city')    return `<span class="filter-pill" style="font-size:11px; padding:4px 12px; background:#DBEAFE; color:#1D4ED8; border-color:#93C5FD;">🏙️ ${jobCity || 'Same City'}</span>`;
+            return jobCity ? `<span class="filter-pill" style="font-size:11px; padding:4px 12px;">${jobCity}</span>` : '';
+        }
+
+        function escapeHtml(s) {
+            return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+
+        async function loadWriterLocation() {
+            try {
+                const profile = await Writely.getUserProfile();
+                if (profile) {
+                    writerLocation.pincode = profile.pincode || '';
+                    writerLocation.city = profile.cityNormalized || (profile.city || '').toLowerCase();
+                }
+            } catch (_) { /* fall through — All India scope still works */ }
+
+            // Update the header hint based on what we know
+            const hint = document.getElementById('locationHint');
+            if (!writerLocation.pincode && !writerLocation.city) {
+                hint.innerHTML = '⚠️ Set your city and pincode in <a href="account.html" style="color:var(--ink-purple);">Account</a> to see nearby jobs.';
+                currentScope = 'all';
+                document.querySelectorAll('.filter-pill[data-scope]').forEach(el => {
+                    el.classList.toggle('active', el.dataset.scope === 'all');
+                });
+            } else {
+                hint.textContent = `Showing jobs in pincode ${writerLocation.pincode || '—'} (${writerLocation.city || ''})`;
+            }
+        }
+
         async function fetchJobs() {
             const container = document.getElementById('jobList');
+            container.innerHTML = `<div class="job-card" style="opacity: 0.5;">
+                <div style="height: 24px; background: #eee; width: 60%; margin-bottom: 12px; border-radius: 4px;"></div>
+                <div style="height: 16px; background: #eee; width: 40%; border-radius: 4px;"></div>
+            </div>`;
+
             try {
-                const jobs = await Writely.getJobFeed();
+                const page = await Writely.getJobFeedPage({
+                    scope: currentScope,
+                    pincode: writerLocation.pincode,
+                    city: writerLocation.city
+                });
+                const jobs = page.jobs || [];
                 container.innerHTML = '';
 
-                if (!jobs || jobs.length === 0) {
+                if (jobs.length === 0) {
+                    const cta = currentScope === 'nearby'
+                        ? `No jobs in your area yet.<br><button onclick="setScope('city')" class="btn btn-secondary" style="margin-top:16px;">Try My City</button>`
+                        : currentScope === 'city'
+                        ? `No jobs in your city yet.<br><button onclick="setScope('all')" class="btn btn-secondary" style="margin-top:16px;">Try All India</button>`
+                        : 'No new jobs available at the moment.';
                     container.innerHTML = `<div style="text-align:center; padding:80px; color:var(--text-tertiary);">
                         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:16px;"><circle cx="12" cy="12" r="10"></circle><line x1="8" y1="12" x2="16" y2="12"></line></svg>
-                        <p>No new jobs available at the moment.</p>
+                        <p>${cta}</p>
                     </div>`;
                     return;
                 }
@@ -241,37 +292,51 @@
                 jobs.forEach(job => {
                     const card = document.createElement('div');
                     card.className = 'job-card';
+                    const cityDisplay = job.city ? job.city.charAt(0).toUpperCase() + job.city.slice(1) : '';
                     card.innerHTML = `
                         <div class="job-header">
                             <div>
-                                <h3 class="job-title">${job.title}</h3>
+                                <h3 class="job-title">${escapeHtml(job.title)}</h3>
                                 <div class="job-meta">
-                                    <span>Academic</span>
+                                    <span>${job.deliveryMethod || 'Digital'}</span>
                                     <span>•</span>
-                                    <span>Master's Level</span>
-                                    <span>•</span>
-                                    <span>Posted just now</span>
+                                    <span>Pincode ${escapeHtml(job.pincode || '—')}</span>
                                 </div>
                             </div>
                             <div class="job-price">₹${job.budget}</div>
                         </div>
                         <p style="color:var(--text-secondary); font-size:15px; margin-bottom:24px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">
-                            ${job.description || 'No description provided.'}
+                            ${escapeHtml(job.description || 'No description provided.')}
                         </p>
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <div style="display:flex; gap:8px;">
-                                <span class="filter-pill" style="font-size:11px; padding:4px 12px;">Verified Seeker</span>
+                                ${proximityBadge(job.proximity, cityDisplay)}
                             </div>
-                            <button class="btn btn-primary" style="padding:10px 24px; font-size:14px;" onclick="openBidModal('${job.id}', '${job.title}', ${job.budget})">Send Proposal</button>
+                            <button class="btn btn-primary" style="padding:10px 24px; font-size:14px;" onclick="openBidModal('${job.id}', ${JSON.stringify(job.title).replace(/"/g, '&quot;')}, ${job.budget})">Send Proposal</button>
                         </div>
                     `;
                     container.appendChild(card);
                 });
             } catch (err) {
                 console.error(err);
-                container.innerHTML = '<p>Failed to load jobs. Please check if API is running.</p>';
+                container.innerHTML = '<p style="text-align:center; padding:40px; color:var(--text-tertiary);">Failed to load jobs. Please try again.</p>';
             }
         }
+
+        function setScope(scope) {
+            currentScope = scope;
+            document.querySelectorAll('.filter-pill[data-scope]').forEach(el => {
+                el.classList.toggle('active', el.dataset.scope === scope);
+            });
+            fetchJobs();
+        }
+
+        // Wire up scope tabs
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.filter-pill[data-scope]').forEach(el => {
+                el.addEventListener('click', () => setScope(el.dataset.scope));
+            });
+        });
 
         function openBidModal(id, title, budget) {
             document.getElementById('jobId').value = id;
@@ -316,7 +381,15 @@
             }
         };
 
-        window.onload = fetchJobs;
+        // Wait for auth, then load writer's location, then fetch jobs in their scope
+        firebase.auth().onAuthStateChanged(async user => {
+            if (!user) {
+                window.location.href = '../seeker-web/login.html';
+                return;
+            }
+            await loadWriterLocation();
+            fetchJobs();
+        });
     </script>
 </body>
 </html>

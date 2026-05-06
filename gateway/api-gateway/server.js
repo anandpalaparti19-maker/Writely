@@ -125,6 +125,30 @@ async function requireAuth(req, res, next) {
 // Health check (public, no auth) — used by Render and uptime monitors
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
+// Preview platform fee for a given budget (and the seeker's current subscription).
+// Used by the "post assignment" UI to show "₹X platform fee" before checkout.
+app.get('/api/fees/preview', requireAuth, async (req, res) => {
+    try {
+        const budget = Number(req.query.budget);
+        if (!Number.isFinite(budget) || budget <= 0 || budget > 500000) {
+            return res.status(400).json({ error: 'Invalid budget' });
+        }
+        const userSnap = await db.collection('users').doc(req.user.uid).get();
+        const subscription = userSnap.exists ? userSnap.data().subscription : null;
+        const fee = computeSeekerFee(budget, subscription);
+        res.json({
+            budget,
+            platformFee: fee,
+            total: budget + fee,
+            subscriptionActive: isSubActive(subscription),
+            subscriptionType: isSubActive(subscription) ? subscription.type : null
+        });
+    } catch (err) {
+        console.error('Fee preview error:', err.message);
+        res.status(500).json({ error: 'Could not compute fee' });
+    }
+});
+
 /**
  * Push a notification to a user's notifications subcollection.
  * Always non-blocking (errors logged, never thrown to caller) — notifications
@@ -159,13 +183,77 @@ console.log('✅ Writely API Gateway (Firebase Admin) Starting...');
 // --- CASHFREE PAYMENTS ---
 
 // Plan catalog — server-controlled to prevent clients from inventing plan types or fees.
-// fixedAmount: charge is fixed regardless of client input.
-// minAmount/maxAmount: client specifies amount within range (used for wallet top-ups).
+//   fixedAmount:       charge is fixed regardless of client input.
+//   minAmount/maxAmount: client specifies amount within range (used for wallet top-ups).
+//   durationDays/durationHours: subscription validity window from purchase time.
+//   field:             which Firestore user field to write the active subscription into.
 const PLAN_CATALOG = {
-    SEEKER_PASS:     { fixedAmount: 120, kind: 'subscription', label: 'Seeker Pass (11 days)' },
-    WRITER_ZERO_FEE: { fixedAmount: 30,  kind: 'subscription', label: 'Writer Zero-Fee Pass (24h)' },
+    // ───── Seeker subscriptions ─────
+    SEEKER_PASS:     { fixedAmount: 120, kind: 'subscription', durationDays: 11, field: 'subscription',       label: 'Seeker Pass (11 days)' },
+    WRITELY_PLUS:    { fixedAmount: 99,  kind: 'subscription', durationDays: 30, field: 'subscription',       label: 'Writely Plus (Monthly)' },
+    WRITELY_PRO:     { fixedAmount: 299, kind: 'subscription', durationDays: 30, field: 'subscription',       label: 'Writely Pro (Monthly)' },
+    // ───── Writer subscriptions ─────
+    WRITER_ZERO_FEE: { fixedAmount: 30,  kind: 'subscription', durationHours: 24, field: 'writerSubscription', label: 'Writer Zero-Fee Pass (24h)' },
+    WRITER_PRO:      { fixedAmount: 149, kind: 'subscription', durationDays: 30,  field: 'writerSubscription', label: 'Writer Pro (Monthly)' },
+    WRITER_ELITE:    { fixedAmount: 499, kind: 'subscription', durationDays: 30,  field: 'writerSubscription', label: 'Writer Elite (Monthly)' },
+    // ───── Wallet ─────
     WALLET_TOPUP:    { minAmount: 100, maxAmount: 50000, kind: 'wallet', label: 'Wallet Top-Up' }
 };
+
+// Centralised fee math — change once, applies everywhere (assign/release, dashboards, invoicing).
+// Adjust these numbers to tune unit economics without touching business logic.
+const FEE_RULES = {
+    // What the SEEKER pays the platform on top of the assignment budget
+    SEEKER: {
+        // Active subscription → flat percentage of budget
+        BY_SUBSCRIPTION: {
+            WRITELY_PRO:  0.02,  // 2% — premium tier
+            WRITELY_PLUS: 0.05,  // 5% — basic tier
+            SEEKER_PASS:  0.02   // legacy compat
+        },
+        // No active subscription → progressive tiers
+        TIERS: [
+            { upTo: 300,    flat: 19 },               // ₹19 flat for tiny jobs
+            { upTo: 1500,   percent: 0.08 },          // 8% for assignments
+            { upTo: 5000,   percent: 0.06 },          // 6% for projects
+            { upTo: Infinity, percent: 0.04 }         // 4% for theses/dissertations
+        ]
+    },
+    // What is DEDUCTED from the writer's payout
+    WRITER: {
+        BY_SUBSCRIPTION: {
+            WRITER_ELITE:    0.05,  // 5% — top tier
+            WRITER_PRO:      0.10,  // 10% — pro
+            WRITER_ZERO_FEE: 0.02   // legacy compat (was effectively 2%)
+        },
+        DEFAULT_PERCENT: 0.15       // No sub: 15% commission (a common gig-marketplace rate)
+    }
+};
+
+function isSubActive(sub) {
+    return sub?.expiresAt?.toDate?.() > new Date();
+}
+
+function computeSeekerFee(budget, subscription) {
+    if (isSubActive(subscription)) {
+        const rate = FEE_RULES.SEEKER.BY_SUBSCRIPTION[subscription.type];
+        if (rate != null) return Math.max(1, Math.round(budget * rate));
+    }
+    for (const tier of FEE_RULES.SEEKER.TIERS) {
+        if (budget < tier.upTo) {
+            return tier.flat != null ? tier.flat : Math.round(budget * tier.percent);
+        }
+    }
+    return Math.round(budget * 0.04); // Safety fallback
+}
+
+function computeWriterDeduction(budget, writerSubscription) {
+    if (isSubActive(writerSubscription)) {
+        const rate = FEE_RULES.WRITER.BY_SUBSCRIPTION[writerSubscription.type];
+        if (rate != null) return Math.max(1, Math.round(budget * rate));
+    }
+    return Math.max(1, Math.round(budget * FEE_RULES.WRITER.DEFAULT_PERCENT));
+}
 
 // Public config endpoint — frontend needs the App ID + environment to init Cashfree.js
 app.get('/api/payments/cashfree/config', (req, res) => {
@@ -312,21 +400,21 @@ async function applyPaidOrder(orderId, expectedUid = null) {
             return { kind: 'wallet', amountAdded: amount };
         }
 
-        // Subscription plans
+        // Subscription plans — metadata-driven (works for all 6 plans)
+        const plan = PLAN_CATALOG[planType];
+        if (!plan || plan.kind !== 'subscription') {
+            throw new Error(`Unknown subscription plan: ${planType}`);
+        }
         const endDate = new Date();
-        let subscriptionField = 'subscription';
-        let subType = 'SEEKER_PASS';
-        if (planType === 'WRITER_ZERO_FEE') {
-            endDate.setHours(endDate.getHours() + 24);
-            subscriptionField = 'writerSubscription';
-            subType = 'WRITER_ZERO_FEE';
-        } else {
-            endDate.setDate(endDate.getDate() + 11);
+        if (plan.durationHours) {
+            endDate.setHours(endDate.getHours() + plan.durationHours);
+        } else if (plan.durationDays) {
+            endDate.setDate(endDate.getDate() + plan.durationDays);
         }
 
         t.update(db.collection('users').doc(uid), {
-            [subscriptionField]: {
-                type: subType,
+            [plan.field]: {
+                type: planType,
                 expiresAt: admin.firestore.Timestamp.fromDate(endDate),
                 paymentId: orderId
             }
@@ -484,14 +572,11 @@ app.post('/api/assignments/:id/release', requireAuth, async (req, res) => {
                 const e = new Error('No writer assigned'); e.code = 'BAD_REQUEST'; throw e;
             }
 
-            // Compute writer deduction (2% if writer has zero-fee pass, else flat ₹15)
-            let writerDeduction = 15;
+            // Compute writer deduction (subscription rate if active, else default %)
             const writerRef = db.collection('users').doc(assignment.activeWriterId);
             const writerSnap = await t.get(writerRef);
-            const writerData = writerSnap.data();
-            if (writerData?.writerSubscription?.expiresAt?.toDate() > new Date()) {
-                writerDeduction = Math.round(assignment.budget * 0.02);
-            }
+            const writerData = writerSnap.data() || {};
+            const writerDeduction = computeWriterDeduction(assignment.budget, writerData.writerSubscription);
             const writerPayout = assignment.budget - writerDeduction;
 
             // Credit wallet (creates if not exists via merge:true)
@@ -683,15 +768,11 @@ app.post('/api/assignments/:id/assign', requireAuth, async (req, res) => {
                 throw new Error("Project is no longer available for hiring");
             }
 
-            // Lock Escrow
-            let platformFee = 15;
+            // Compute platform fee (tiered, with subscription discount if active)
             const seekerRef = db.collection('users').doc(assignment.seekerId);
             const seekerSnap = await t.get(seekerRef);
-            const seekerData = seekerSnap.data();
-
-            if (seekerData?.subscription?.expiresAt?.toDate() > new Date()) {
-                platformFee = Math.round(assignment.budget * 0.02);
-            }
+            const seekerData = seekerSnap.data() || {};
+            const platformFee = computeSeekerFee(assignment.budget, seekerData.subscription);
 
             const totalAmount = assignment.budget + platformFee;
 
@@ -906,6 +987,155 @@ app.post('/api/assignments/:id/dispute', requireAuth, async (req, res) => {
         res.json({ message: 'Project frozen. Arbitration initiated.' });
     } catch (err) {
         res.status(400).json({ error: err.message });
+    }
+});
+
+// =====================================================================
+// MESSAGING — chat between seeker and assigned writer per assignment
+// =====================================================================
+
+// POST a message into an assignment's chat thread.
+// Authorisation: only the seeker or the assigned/bidding writer can send.
+// Side-effect: pushes a notification to the OTHER party.
+app.post('/api/assignments/:id/messages', requireAuth, async (req, res) => {
+    try {
+        const { text } = req.body;
+        const trimmed = String(text || '').trim();
+        if (trimmed.length < 1 || trimmed.length > 2000) {
+            return res.status(400).json({ error: 'Message must be 1–2000 chars' });
+        }
+
+        const assignmentRef = db.collection('assignments').doc(req.params.id);
+        const snap = await assignmentRef.get();
+        if (!snap.exists) return res.status(404).json({ error: 'Assignment not found' });
+        const asn = snap.data();
+
+        const isSeeker = asn.seekerId === req.user.uid;
+        const isActiveWriter = asn.activeWriterId === req.user.uid;
+        // Allow bidders to message before assignment too (so seeker can chat with bidders)
+        const isBidder = (asn.bids || []).some(b => b.writerId === req.user.uid);
+
+        if (!isSeeker && !isActiveWriter && !isBidder) {
+            return res.status(403).json({ error: 'You are not part of this assignment' });
+        }
+
+        const msgRef = await db.collection('messages').add({
+            assignmentId: req.params.id,
+            senderId: req.user.uid,
+            text: trimmed,
+            timestamp: FieldValue.serverTimestamp()
+        });
+
+        // Notify the other party (only if a writer is actively assigned)
+        const otherUid = isSeeker ? asn.activeWriterId : asn.seekerId;
+        if (otherUid && otherUid !== req.user.uid) {
+            createNotification(otherUid, {
+                type: 'MESSAGE_RECEIVED',
+                title: '💬 New message',
+                body: trimmed.length > 80 ? trimmed.substring(0, 77) + '…' : trimmed,
+                link: `/apps/seeker-web/messages.html#${req.params.id}`,
+                meta: { assignmentId: req.params.id, messageId: msgRef.id }
+            });
+        }
+
+        res.status(201).json({ id: msgRef.id, text: trimmed });
+    } catch (err) {
+        console.error('Send message error:', err.message);
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// =====================================================================
+// REVIEWS — post-completion ratings (5-star + comment)
+// Both seeker and writer can leave one review per completed assignment.
+// Updates the reviewee's aggregate rating (running average + count).
+// =====================================================================
+app.post('/api/assignments/:id/review', requireAuth, async (req, res) => {
+    try {
+        const { rating, comment } = req.body;
+        const numRating = Number(rating);
+        if (!Number.isInteger(numRating) || numRating < 1 || numRating > 5) {
+            return res.status(400).json({ error: 'Rating must be an integer 1–5' });
+        }
+        const cleanComment = String(comment || '').trim().substring(0, 500);
+
+        const assignmentRef = db.collection('assignments').doc(req.params.id);
+        const reviewerId = req.user.uid;
+
+        const result = await db.runTransaction(async (t) => {
+            const snap = await t.get(assignmentRef);
+            if (!snap.exists) { const e = new Error('Assignment not found'); e.code = 'NOT_FOUND'; throw e; }
+            const asn = snap.data();
+
+            if (asn.status !== 'COMPLETED') {
+                const e = new Error('Reviews allowed only after completion'); e.code = 'BAD_STATE'; throw e;
+            }
+
+            const isSeeker = asn.seekerId === reviewerId;
+            const isWriter = asn.activeWriterId === reviewerId;
+            if (!isSeeker && !isWriter) {
+                const e = new Error('Only participants can review'); e.code = 'FORBIDDEN'; throw e;
+            }
+
+            // Determine reviewee
+            const revieweeId = isSeeker ? asn.activeWriterId : asn.seekerId;
+            if (!revieweeId) { const e = new Error('No counterpart to review'); e.code = 'BAD_REQUEST'; throw e; }
+
+            // One review per (assignment, reviewer) pair → deterministic doc ID
+            const reviewId = `${req.params.id}_${reviewerId}`;
+            const reviewRef = db.collection('reviews').doc(reviewId);
+            const existing = await t.get(reviewRef);
+            if (existing.exists) {
+                const e = new Error('You have already reviewed this assignment'); e.code = 'CONFLICT'; throw e;
+            }
+
+            // Update reviewee's aggregate metrics (running mean for stable accuracy)
+            const userRef = db.collection('users').doc(revieweeId);
+            const userSnap = await t.get(userRef);
+            const cur = userSnap.data() || {};
+            const prevCount = cur.metrics?.reviewCount || 0;
+            const prevAvg = cur.metrics?.avgRating || 0;
+            const newCount = prevCount + 1;
+            const newAvg = ((prevAvg * prevCount) + numRating) / newCount;
+
+            t.set(reviewRef, {
+                assignmentId: req.params.id,
+                reviewerId,
+                revieweeId,
+                reviewerRole: isSeeker ? 'SEEKER' : 'WRITER',
+                rating: numRating,
+                comment: cleanComment,
+                createdAt: FieldValue.serverTimestamp()
+            });
+
+            t.set(userRef, {
+                metrics: {
+                    ...(cur.metrics || {}),
+                    avgRating: Math.round(newAvg * 100) / 100,
+                    reviewCount: newCount
+                }
+            }, { merge: true });
+
+            return { revieweeId, newAvg, newCount };
+        });
+
+        // Notify the reviewee
+        createNotification(result.revieweeId, {
+            type: 'REVIEW_RECEIVED',
+            title: `⭐ You got a ${numRating}-star review`,
+            body: cleanComment ? `"${cleanComment.substring(0, 100)}${cleanComment.length > 100 ? '…' : ''}"` : 'Tap to view.',
+            link: `/apps/seeker-web/dashboard.html#assignment/${req.params.id}`,
+            meta: { assignmentId: req.params.id, rating: numRating }
+        });
+
+        res.status(201).json({ status: 'success', avgRating: result.newAvg, reviewCount: result.newCount });
+    } catch (err) {
+        const code = err.code === 'NOT_FOUND' ? 404
+                    : err.code === 'FORBIDDEN' ? 403
+                    : err.code === 'CONFLICT' ? 409
+                    : 400;
+        console.error('Review error:', err.message);
+        res.status(code).json({ error: err.message });
     }
 });
 

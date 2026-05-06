@@ -320,14 +320,29 @@ Writely._cashfreePay = async function({ planType, amount }) {
     return verifyData; // { kind, expiresAt? , amountAdded? , alreadyProcessed? }
 };
 
-Writely.buySubscription = async function() {
-    const data = await this._cashfreePay({ planType: 'SEEKER_PASS' });
+// Generic plan purchase helper — works for any subscription plan.
+//   planType: 'SEEKER_PASS' | 'WRITELY_PLUS' | 'WRITELY_PRO' | 'WRITER_ZERO_FEE' | 'WRITER_PRO' | 'WRITER_ELITE'
+Writely.buyPlan = async function(planType) {
+    const data = await this._cashfreePay({ planType });
     return data.expiresAt ? new Date(data.expiresAt) : null;
 };
 
-Writely.buyWriterSubscription = async function() {
-    const data = await this._cashfreePay({ planType: 'WRITER_ZERO_FEE' });
-    return data.expiresAt ? new Date(data.expiresAt) : null;
+// Convenience wrappers (kept for backward compatibility with existing UI)
+Writely.buySubscription       = function() { return this.buyPlan('SEEKER_PASS'); };
+Writely.buyWriterSubscription = function() { return this.buyPlan('WRITER_ZERO_FEE'); };
+Writely.buyWritelyPlus        = function() { return this.buyPlan('WRITELY_PLUS'); };
+Writely.buyWritelyPro         = function() { return this.buyPlan('WRITELY_PRO'); };
+Writely.buyWriterPro          = function() { return this.buyPlan('WRITER_PRO'); };
+Writely.buyWriterElite        = function() { return this.buyPlan('WRITER_ELITE'); };
+
+// Get an authoritative fee preview from the backend (matches what user will actually pay).
+Writely.getFeePreview = async function(budget) {
+    const res = await this.apiFetch(`/fees/preview?budget=${encodeURIComponent(budget)}`);
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Could not load fee preview');
+    }
+    return res.json(); // { budget, platformFee, total, subscriptionActive, subscriptionType }
 };
 
 // Top up the seeker's wallet with INR via Cashfree. Range: ₹100 – ₹50,000.
@@ -338,6 +353,77 @@ Writely.topUpWallet = async function(amount) {
     }
     const data = await this._cashfreePay({ planType: 'WALLET_TOPUP', amount: numAmount });
     return data.amountAdded || numAmount;
+};
+
+// =====================================================================
+// MESSAGING — chat helpers (real-time via Firestore onSnapshot)
+// Server enforces participation and pushes notification to the other side.
+// =====================================================================
+Writely.sendMessage = async function(assignmentId, text) {
+    const trimmed = String(text || '').trim();
+    if (!trimmed) throw new Error("Message cannot be empty");
+    const res = await this.apiFetch(`/assignments/${assignmentId}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ text: trimmed })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to send message');
+    return data;
+};
+
+/**
+ * Subscribe to real-time messages for an assignment.
+ *
+ *   const unsub = Writely.subscribeToMessages(assignmentId, (messages) => { ... });
+ *   // later: unsub() to stop listening
+ */
+Writely.subscribeToMessages = function(assignmentId, callback) {
+    if (!assignmentId || typeof callback !== 'function') {
+        throw new Error("subscribeToMessages requires (assignmentId, callback)");
+    }
+    return firebase.firestore().collection('messages')
+        .where('assignmentId', '==', assignmentId)
+        .orderBy('timestamp', 'asc')
+        .limit(200)
+        .onSnapshot(snap => {
+            const messages = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            callback(messages);
+        }, err => {
+            console.warn('Messages listener error:', err.message);
+            callback([], err);
+        });
+};
+
+// =====================================================================
+// REVIEWS — submit a 5-star + comment review after completion
+// =====================================================================
+Writely.submitReview = async function(assignmentId, rating, comment = '') {
+    const numRating = Number(rating);
+    if (!Number.isInteger(numRating) || numRating < 1 || numRating > 5) {
+        throw new Error("Rating must be 1–5");
+    }
+    const res = await this.apiFetch(`/assignments/${assignmentId}/review`, {
+        method: 'POST',
+        body: JSON.stringify({ rating: numRating, comment })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to submit review');
+    return data;
+};
+
+// Subscribe to reviews for a specific user (e.g., to show on a writer's profile).
+Writely.subscribeToUserReviews = function(userId, callback) {
+    return firebase.firestore().collection('reviews')
+        .where('revieweeId', '==', userId)
+        .orderBy('createdAt', 'desc')
+        .limit(50)
+        .onSnapshot(snap => {
+            const reviews = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            callback(reviews);
+        }, err => {
+            console.warn('Reviews listener error:', err.message);
+            callback([], err);
+        });
 };
 
 Writely.logout = async function() {

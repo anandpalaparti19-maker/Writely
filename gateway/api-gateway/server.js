@@ -741,26 +741,50 @@ app.get('/api/assignments', requireAuth, async (req, res) => {
         const pincode = String(req.query.pincode || '').replace(/\D/g, '').slice(0, 6) || null;
         const cityRaw = String(req.query.city || '').trim().toLowerCase().slice(0, 80) || null;
 
-        let query = db.collection('assignments')
-            .where('status', 'in', ['POSTED', 'BIDDING']);
-
-        // Apply location filter BEFORE orderBy (Firestore composite-index friendly)
-        if (scope === 'nearby' && pincode) {
-            query = query.where('pincode', '==', pincode);
-        } else if (scope === 'city' && cityRaw) {
-            query = query.where('city', '==', cityRaw);
+        // Helper: build a query for a single status value with optional location filter
+        function buildQuery(status) {
+            let q = db.collection('assignments').where('status', '==', status);
+            if (scope === 'nearby' && pincode) {
+                q = q.where('pincode', '==', pincode);
+            } else if (scope === 'city' && cityRaw) {
+                q = q.where('city', '==', cityRaw);
+            }
+            return q.orderBy('createdAt', 'desc');
         }
 
-        query = query.orderBy('createdAt', 'desc');
-
-        // Cursor: continue after a specific assignment doc
-        if (afterId) {
-            const afterDoc = await db.collection('assignments').doc(String(afterId)).get();
-            if (afterDoc.exists) query = query.startAfter(afterDoc);
+        let docs = [];
+        try {
+            // Try the compound 'in' query first (requires composite index)
+            let query = db.collection('assignments').where('status', 'in', ['POSTED', 'BIDDING']);
+            if (scope === 'nearby' && pincode) {
+                query = query.where('pincode', '==', pincode);
+            } else if (scope === 'city' && cityRaw) {
+                query = query.where('city', '==', cityRaw);
+            }
+            query = query.orderBy('createdAt', 'desc');
+            if (afterId) {
+                const afterDoc = await db.collection('assignments').doc(String(afterId)).get();
+                if (afterDoc.exists) query = query.startAfter(afterDoc);
+            }
+            const snap = await query.limit(limit + 1).get();
+            docs = snap.docs;
+        } catch (indexErr) {
+            // Fallback: fetch POSTED and BIDDING separately and merge (no composite index needed)
+            console.warn('Composite index missing, using fallback query:', indexErr.message.split('\n')[0]);
+            const [postedSnap, biddingSnap] = await Promise.all([
+                buildQuery('POSTED').limit(limit).get(),
+                buildQuery('BIDDING').limit(limit).get()
+            ]);
+            const merged = [...postedSnap.docs, ...biddingSnap.docs];
+            // Sort by createdAt descending
+            merged.sort((a, b) => {
+                const tA = a.data().createdAt?.toMillis?.() || 0;
+                const tB = b.data().createdAt?.toMillis?.() || 0;
+                return tB - tA;
+            });
+            docs = merged;
         }
 
-        const snap = await query.limit(limit + 1).get();
-        const docs = snap.docs;
         const hasMore = docs.length > limit;
         const pageDocs = hasMore ? docs.slice(0, limit) : docs;
 
@@ -780,10 +804,10 @@ app.get('/api/assignments', requireAuth, async (req, res) => {
         });
     } catch (err) {
         console.error('❌ Query failed:', err.message);
-        // If Firestore demands a composite index, the error message will include a click-to-create link.
         res.status(500).json({ error: err.message });
     }
 });
+
 
 // --- SUBMIT BID ---
 app.post('/api/assignments/:id/bid', requireAuth, async (req, res) => {

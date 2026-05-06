@@ -225,7 +225,7 @@
     <script>
         // Writer's location (loaded from their Firestore profile on auth)
         let writerLocation = { pincode: '', city: '' };
-        let currentScope = 'nearby';
+        let currentScope = 'all'; // default to 'all' until we know the writer's location
 
         // Pretty label for the proximity badge on each job card
         function proximityBadge(prox, jobCity) {
@@ -378,11 +378,12 @@
             btn.innerText = 'Submitting...';
             btn.disabled = true;
 
+            const currentUser = firebase.auth().currentUser;
             const bidData = {
-                writerId: 'W_EXPERT_01', // Static for now, in prod from Auth
                 amount: Number(document.getElementById('bidAmount').value),
                 proposal: document.getElementById('bidProposal').value
             };
+            if (!currentUser) { alert('Not logged in. Please refresh.'); return; }
 
             try {
                 const jobId = document.getElementById('jobId').value;

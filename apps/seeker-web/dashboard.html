@@ -576,9 +576,11 @@
 
         async function initDashboard() {
             try {
-                const user = await loadProfile();
+                await loadProfile();
                 loadDashboardData();
-                Writely.initNotifications(user.uid);
+                // Use the current user from Firebase auth (loadProfile already verified they exist)
+                const currentUser = firebase.auth().currentUser;
+                if (currentUser) Writely.initNotifications(currentUser.uid);
             } catch (err) {
                 console.error("Dashboard init failed:", err);
             }

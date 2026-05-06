@@ -346,10 +346,13 @@ Writely.getJobFeed = async function(opts = {}) {
     return page.jobs;
 };
 
-Writely.getJobFeedPage = async function({ limit = 20, after = null } = {}) {
+Writely.getJobFeedPage = async function({ limit = 20, after = null, scope = 'all', pincode = '', city = '' } = {}) {
     const params = new URLSearchParams();
     params.set('limit', String(limit));
-    if (after) params.set('after', after);
+    if (after)   params.set('after',   after);
+    if (scope)   params.set('scope',   scope);
+    if (pincode) params.set('pincode', pincode);
+    if (city)    params.set('city',    city);
     try {
         const response = await this.apiFetch(`/assignments?${params.toString()}`);
         if (!response.ok) throw new Error("Failed to fetch jobs");
@@ -362,6 +365,7 @@ Writely.getJobFeedPage = async function({ limit = 20, after = null } = {}) {
         return { jobs: [], nextCursor: null };
     }
 };
+
 
 /**
  * Download an attachment the seeker uploaded with the assignment.

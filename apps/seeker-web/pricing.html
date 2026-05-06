@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pricing | Writely</title>
+    <link rel="stylesheet" href="../../shared/utils/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    <script src="../../shared/utils/logic.js" defer></script>
+    <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
+    <style>
+        body { background: var(--bg-secondary, #f8fafc); min-height: 100vh; padding-bottom: 80px; }
+        .pricing-hero {
+            text-align: center;
+            padding: 64px 24px 32px;
+            max-width: 720px;
+            margin: 0 auto;
+        }
+        .pricing-hero h1 {
+            font-size: clamp(28px, 4vw, 44px);
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            margin-bottom: 12px;
+        }
+        .pricing-hero p {
+            color: var(--text-secondary, #64748b);
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        .role-toggle {
+            display: inline-flex;
+            background: white;
+            border-radius: 14px;
+            padding: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.04);
+            margin-top: 24px;
+        }
+        .role-toggle button {
+            background: transparent; border: none;
+            padding: 10px 24px; border-radius: 10px;
+            font-weight: 600; cursor: pointer; font-size: 14px;
+            color: var(--text-secondary, #64748b);
+        }
+        .role-toggle button.active {
+            background: var(--ink-purple, #6366f1);
+            color: white;
+        }
+
+        .plans-grid {
+            max-width: 1120px;
+            margin: 40px auto 0;
+            padding: 0 24px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+        .plan-card {
+            background: white;
+            border-radius: 24px;
+            padding: 32px;
+            border: 1px solid var(--border, #e5e7eb);
+            position: relative;
+            transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+        }
+        .plan-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 16px 32px rgba(0,0,0,.06);
+        }
+        .plan-card.featured {
+            border-color: var(--ink-purple, #6366f1);
+            border-width: 2px;
+            box-shadow: 0 16px 40px rgba(99, 102, 241, 0.15);
+        }
+        .plan-badge {
+            position: absolute; top: -10px; right: 24px;
+            background: var(--ink-purple, #6366f1);
+            color: white; font-size: 11px; font-weight: 700;
+            padding: 4px 12px; border-radius: 999px;
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .plan-name { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+        .plan-tagline { color: var(--text-tertiary, #94a3b8); font-size: 13px; margin-bottom: 24px; }
+        .plan-price { font-size: 40px; font-weight: 800; letter-spacing: -0.02em; }
+        .plan-price-suffix { font-size: 14px; font-weight: 500; color: var(--text-tertiary, #94a3b8); }
+        .plan-features {
+            list-style: none; padding: 24px 0; margin: 24px 0 0;
+            border-top: 1px solid var(--border, #f1f5f9);
+        }
+        .plan-features li {
+            padding: 8px 0; font-size: 14px;
+            color: var(--text-primary, #0f172a);
+            display: flex; align-items: center; gap: 8px;
+        }
+        .plan-features li::before {
+            content: "✓"; color: #10b981; font-weight: 700; font-size: 16px;
+        }
+        .plan-cta {
+            width: 100%; padding: 14px;
+            border-radius: 12px; font-weight: 700;
+            font-size: 14px; cursor: pointer;
+            border: none; margin-top: 16px;
+            transition: opacity .15s ease;
+        }
+        .plan-cta.primary {
+            background: var(--ink-purple, #6366f1);
+            color: white;
+        }
+        .plan-cta.primary:hover { opacity: 0.9; }
+        .plan-cta.ghost {
+            background: var(--bg-secondary, #f1f5f9);
+            color: var(--text-primary, #0f172a);
+        }
+        .plan-cta:disabled { opacity: 0.5; cursor: not-allowed; }
+        .role-section { display: none; }
+        .role-section.active { display: block; }
+
+        .pricing-footer {
+            max-width: 720px; margin: 64px auto 0;
+            padding: 32px 24px; text-align: center;
+            color: var(--text-tertiary, #94a3b8); font-size: 13px;
+        }
+        .pricing-footer a { color: var(--ink-purple, #6366f1); text-decoration: none; }
+    </style>
+</head>
+<body>
+    <header class="pricing-hero">
+        <a href="dashboard.html" style="display:inline-block; margin-bottom:24px; color:var(--text-secondary); text-decoration:none; font-size:14px;">← Back to Dashboard</a>
+        <h1>Pricing that grows with you</h1>
+        <p>Start free, upgrade when you're ready. No hidden fees, cancel anytime.</p>
+
+        <div class="role-toggle">
+            <button id="roleSeeker" class="active" onclick="setRole('seeker')">For Seekers</button>
+            <button id="roleWriter" onclick="setRole('writer')">For Writers</button>
+        </div>
+    </header>
+
+    <!-- ────────── Seeker Plans ────────── -->
+    <section class="role-section active" id="seekerPlans">
+        <div class="plans-grid">
+            <!-- Free -->
+            <div class="plan-card">
+                <div class="plan-name">Free</div>
+                <div class="plan-tagline">Pay-as-you-go</div>
+                <div class="plan-price">₹0<span class="plan-price-suffix"> /month</span></div>
+                <ul class="plan-features">
+                    <li>Tiered platform fees (₹19 → 4%)</li>
+                    <li>Unlimited assignments</li>
+                    <li>Standard support</li>
+                    <li>Escrow protection</li>
+                </ul>
+                <button class="plan-cta ghost" disabled>Current Plan</button>
+            </div>
+
+            <!-- Plus -->
+            <div class="plan-card featured">
+                <span class="plan-badge">Most Popular</span>
+                <div class="plan-name">Writely Plus</div>
+                <div class="plan-tagline">For regular users</div>
+                <div class="plan-price">₹99<span class="plan-price-suffix"> /month</span></div>
+                <ul class="plan-features">
+                    <li>Flat 5% platform fee</li>
+                    <li>1 free Express delivery / mo</li>
+                    <li>Plagiarism check (5 free)</li>
+                    <li>Priority support</li>
+                </ul>
+                <button class="plan-cta primary" data-plan="WRITELY_PLUS">Upgrade to Plus</button>
+            </div>
+
+            <!-- Pro -->
+            <div class="plan-card">
+                <div class="plan-name">Writely Pro</div>
+                <div class="plan-tagline">For power users</div>
+                <div class="plan-price">₹299<span class="plan-price-suffix"> /month</span></div>
+                <ul class="plan-features">
+                    <li>Flat 2% platform fee</li>
+                    <li>Unlimited Express deliveries</li>
+                    <li>AI Outline Generator</li>
+                    <li>Dedicated mentor (chat)</li>
+                </ul>
+                <button class="plan-cta primary" data-plan="WRITELY_PRO">Upgrade to Pro</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ────────── Writer Plans ────────── -->
+    <section class="role-section" id="writerPlans">
+        <div class="plans-grid">
+            <!-- Free Writer -->
+            <div class="plan-card">
+                <div class="plan-name">Free</div>
+                <div class="plan-tagline">Start earning</div>
+                <div class="plan-price">₹0<span class="plan-price-suffix"> /month</span></div>
+                <ul class="plan-features">
+                    <li>15% commission per job</li>
+                    <li>Unlimited bids</li>
+                    <li>Standard placement</li>
+                    <li>Standard withdrawal speed</li>
+                </ul>
+                <button class="plan-cta ghost" disabled>Current Plan</button>
+            </div>
+
+            <!-- Writer Pro -->
+            <div class="plan-card featured">
+                <span class="plan-badge">Best Value</span>
+                <div class="plan-name">Writer Pro</div>
+                <div class="plan-tagline">For active writers</div>
+                <div class="plan-price">₹149<span class="plan-price-suffix"> /month</span></div>
+                <ul class="plan-features">
+                    <li>10% commission per job</li>
+                    <li>Priority bid placement</li>
+                    <li>"Pro" badge on profile</li>
+                    <li>2× faster withdrawals</li>
+                </ul>
+                <button class="plan-cta primary" data-plan="WRITER_PRO">Upgrade to Pro</button>
+            </div>
+
+            <!-- Writer Elite -->
+            <div class="plan-card">
+                <div class="plan-name">Writer Elite</div>
+                <div class="plan-tagline">For full-timers</div>
+                <div class="plan-price">₹499<span class="plan-price-suffix"> /month</span></div>
+                <ul class="plan-features">
+                    <li>5% commission per job</li>
+                    <li>Top-tier placement</li>
+                    <li>Verified Elite badge</li>
+                    <li>Access to premium-only jobs</li>
+                </ul>
+                <button class="plan-cta primary" data-plan="WRITER_ELITE">Upgrade to Elite</button>
+            </div>
+        </div>
+    </section>
+
+    <footer class="pricing-footer">
+        Subscriptions auto-renew monthly. <a href="#" onclick="alert('Email support@writely.com to cancel.')">Cancel anytime</a>.
+        <br>All payments are securely processed by <strong>Cashfree</strong>.
+    </footer>
+
+    <script>
+        function setRole(role) {
+            document.getElementById('roleSeeker').classList.toggle('active', role === 'seeker');
+            document.getElementById('roleWriter').classList.toggle('active', role === 'writer');
+            document.getElementById('seekerPlans').classList.toggle('active', role === 'seeker');
+            document.getElementById('writerPlans').classList.toggle('active', role === 'writer');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Auto-show writer tab if user is a writer
+            firebase.auth().onAuthStateChanged(async user => {
+                if (!user) return;
+                try {
+                    const doc = await firebase.firestore().collection('users').doc(user.uid).get();
+                    if (doc.exists && doc.data().role === 'WRITER') setRole('writer');
+                } catch (_) {}
+            });
+
+            // Wire up plan buttons
+            document.querySelectorAll('[data-plan]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const planType = btn.dataset.plan;
+                    const originalText = btn.textContent;
+                    btn.disabled = true;
+                    btn.textContent = 'Processing…';
+                    try {
+                        const expiresAt = await Writely.buyPlan(planType);
+                        if (expiresAt) {
+                            alert(`✅ ${planType.replace('_', ' ')} active until ${expiresAt.toLocaleDateString()}`);
+                            window.location.href = 'dashboard.html';
+                        }
+                    } catch (err) {
+                        console.error('Plan purchase failed:', err);
+                        alert('Could not complete purchase: ' + (err.message || err));
+                    } finally {
+                        btn.disabled = false;
+                        btn.textContent = originalText;
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

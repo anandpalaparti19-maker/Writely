@@ -410,6 +410,145 @@ Writely.subscribeToMessages = function(assignmentId, callback) {
 // =====================================================================
 // REVIEWS — submit a 5-star + comment review after completion
 // =====================================================================
+
+/**
+ * Open a review modal for an assignment.
+ *   Writely.reviews.prompt(assignmentId).then(result => ...)
+ * Resolves with the submitted review or null if cancelled.
+ */
+Writely.reviews = (function() {
+    let modalEl = null;
+
+    function injectStyles() {
+        if (document.getElementById('writely-review-styles')) return;
+        const s = document.createElement('style');
+        s.id = 'writely-review-styles';
+        s.textContent = `
+            .wr-review-overlay {
+                position: fixed; inset: 0; z-index: 10000;
+                background: rgba(15, 23, 42, .6);
+                display: flex; align-items: center; justify-content: center;
+                padding: 20px; backdrop-filter: blur(4px);
+            }
+            .wr-review-card {
+                background: white; width: min(440px, 100%);
+                border-radius: 20px; padding: 32px;
+                box-shadow: 0 24px 64px rgba(0,0,0,.2);
+                animation: wrReviewIn .2s ease;
+            }
+            @keyframes wrReviewIn { from { opacity:0; transform: scale(.95); } to { opacity:1; transform: scale(1); } }
+            .wr-review-card h3 { margin: 0 0 8px; font-size: 22px; font-weight: 800; }
+            .wr-review-card .wr-review-sub { color: #64748b; font-size: 14px; margin-bottom: 24px; }
+            .wr-stars { display: flex; gap: 8px; justify-content: center; margin: 8px 0 24px; }
+            .wr-star {
+                width: 40px; height: 40px; cursor: pointer;
+                color: #e5e7eb; transition: transform .15s ease, color .15s ease;
+                display: inline-flex; align-items: center; justify-content: center;
+                font-size: 32px; line-height: 1;
+            }
+            .wr-star:hover { transform: scale(1.15); }
+            .wr-star.filled { color: #fbbf24; }
+            .wr-review-textarea {
+                width: 100%; min-height: 90px; padding: 12px;
+                border: 1px solid #e5e7eb; border-radius: 12px;
+                font: inherit; font-size: 14px; resize: vertical;
+                outline: none; transition: border-color .15s ease;
+            }
+            .wr-review-textarea:focus { border-color: #6366f1; }
+            .wr-review-actions { display: flex; gap: 12px; margin-top: 20px; justify-content: flex-end; }
+            .wr-review-btn {
+                padding: 10px 20px; border-radius: 10px; font-weight: 600;
+                font-size: 14px; cursor: pointer; border: none;
+            }
+            .wr-review-btn.primary { background: #6366f1; color: white; }
+            .wr-review-btn.primary:hover { background: #4f46e5; }
+            .wr-review-btn.primary:disabled { opacity: .5; cursor: not-allowed; }
+            .wr-review-btn.ghost { background: transparent; color: #64748b; }
+            .wr-review-btn.ghost:hover { background: #f1f5f9; }
+        `;
+        document.head.appendChild(s);
+    }
+
+    function close() {
+        if (modalEl) { modalEl.remove(); modalEl = null; }
+    }
+
+    function prompt(assignmentId, { title = 'Leave a review' } = {}) {
+        injectStyles();
+        close(); // Ensure only one modal at a time
+
+        return new Promise((resolve) => {
+            let rating = 0;
+
+            modalEl = document.createElement('div');
+            modalEl.className = 'wr-review-overlay';
+            modalEl.innerHTML = `
+                <div class="wr-review-card" role="dialog" aria-modal="true">
+                    <h3>${title}</h3>
+                    <p class="wr-review-sub">Help others by sharing your experience. Your review is public.</p>
+                    <div class="wr-stars" id="wrStars">
+                        ${[1,2,3,4,5].map(i => `<span class="wr-star" data-val="${i}">★</span>`).join('')}
+                    </div>
+                    <textarea class="wr-review-textarea" id="wrComment" placeholder="Optional: what stood out? (max 500 chars)" maxlength="500"></textarea>
+                    <div class="wr-review-actions">
+                        <button class="wr-review-btn ghost" id="wrCancel" type="button">Cancel</button>
+                        <button class="wr-review-btn primary" id="wrSubmit" type="button" disabled>Submit Review</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modalEl);
+
+            const stars = modalEl.querySelectorAll('.wr-star');
+            const submitBtn = modalEl.querySelector('#wrSubmit');
+
+            function updateStars() {
+                stars.forEach(s => {
+                    s.classList.toggle('filled', Number(s.dataset.val) <= rating);
+                });
+                submitBtn.disabled = rating === 0;
+            }
+
+            stars.forEach(star => {
+                star.addEventListener('click', () => {
+                    rating = Number(star.dataset.val);
+                    updateStars();
+                });
+            });
+
+            modalEl.querySelector('#wrCancel').addEventListener('click', () => {
+                close();
+                resolve(null);
+            });
+
+            // Close on overlay click (but not card click)
+            modalEl.addEventListener('click', (e) => {
+                if (e.target === modalEl) {
+                    close();
+                    resolve(null);
+                }
+            });
+
+            submitBtn.addEventListener('click', async () => {
+                if (rating === 0) return;
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Submitting…';
+                try {
+                    const comment = modalEl.querySelector('#wrComment').value;
+                    const result = await Writely.submitReview(assignmentId, rating, comment);
+                    close();
+                    resolve(result);
+                } catch (err) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Submit Review';
+                    alert('Could not submit review: ' + (err.message || err));
+                }
+            });
+        });
+    }
+
+    return { prompt, close };
+})();
+
 Writely.submitReview = async function(assignmentId, rating, comment = '') {
     const numRating = Number(rating);
     if (!Number.isInteger(numRating) || numRating < 1 || numRating > 5) {

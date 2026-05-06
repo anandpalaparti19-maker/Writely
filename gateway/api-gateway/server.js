@@ -974,6 +974,46 @@ app.post('/api/assignments/:id/submit', requireAuth, upload.single('solution'), 
     }
 });
 
+// --- DOWNLOAD ORIGINAL BRIEF / ATTACHMENTS (seeker's uploaded files) ---
+// Only the seeker OR the currently hired writer (activeWriterId) can download.
+// Writers who only placed a bid (but weren't hired) cannot — prevents scraping.
+app.get('/api/assignments/:id/attachments/:index/download', requireAuth, async (req, res) => {
+    try {
+        const assignmentRef = db.collection('assignments').doc(req.params.id);
+        const doc = await assignmentRef.get();
+        if (!doc.exists) return res.status(404).send('Assignment not found');
+
+        const job = doc.data();
+        const isSeeker = job.seekerId === req.user.uid;
+        const isAssignedWriter = job.activeWriterId && job.activeWriterId === req.user.uid;
+
+        if (!isSeeker && !isAssignedWriter) {
+            return res.status(403).send('Forbidden — only the seeker or the assigned writer can download attachments');
+        }
+
+        const attachments = Array.isArray(job.attachments) ? job.attachments : [];
+        const idx = Number(req.params.index);
+        if (!Number.isInteger(idx) || idx < 0 || idx >= attachments.length) {
+            return res.status(404).send('Attachment not found');
+        }
+
+        const att = attachments[idx];
+        if (!att.storagePath) return res.status(400).send('Attachment has no file');
+
+        // Short-lived signed URL (15 min) so the link can't be shared permanently
+        const [url] = await bucket.file(att.storagePath).getSignedUrl({
+            action: 'read',
+            expires: Date.now() + 15 * 60 * 1000,
+            responseDisposition: `attachment; filename="${att.filename || 'download'}"`
+        });
+
+        res.redirect(url);
+    } catch (err) {
+        console.error('Attachment download error:', err.message);
+        res.status(500).send('Download failed');
+    }
+});
+
 // --- SECURE DOWNLOAD ENDPOINT (only seeker or assigned writer can download) ---
 app.get('/api/assignments/:id/download', requireAuth, async (req, res) => {
     try {
@@ -1246,19 +1286,258 @@ app.post('/api/support/chat', aiLimiter, requireAuth, async (req, res) => {
     }
 });
 
-// --- ADMIN EVENTS (reads from real events collection; admin-only) ---
-app.get('/api/events', requireAuth, async (req, res) => {
+// =====================================================================
+// ADMIN ENDPOINTS
+// All require role == 'ADMIN' on the user's profile (set manually in Firestore).
+// =====================================================================
+
+// Admin gate — chains after requireAuth.
+async function requireAdmin(req, res, next) {
     try {
-        // Verify admin role
         const userDoc = await db.collection('users').doc(req.user.uid).get();
         if (!userDoc.exists || userDoc.data().role !== 'ADMIN') {
             return res.status(403).json({ error: 'Admin access required' });
         }
-        const snap = await db.collection('events').orderBy('timestamp', 'desc').limit(50).get();
+        req.adminProfile = userDoc.data();
+        next();
+    } catch (err) {
+        console.error('requireAdmin error:', err.message);
+        res.status(500).json({ error: 'Auth check failed' });
+    }
+}
+
+// --- ADMIN EVENTS (audit log) ---
+app.get('/api/events', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const snap = await db.collection('events').orderBy('timestamp', 'desc').limit(100).get();
         res.json(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (err) {
         console.error('Events error:', err.message);
         res.status(500).json({ error: 'Could not fetch events' });
+    }
+});
+
+// --- PLATFORM STATS (totals for the dashboard cards) ---
+app.get('/api/admin/stats', requireAuth, requireAdmin, async (_req, res) => {
+    try {
+        const [usersSnap, asnSnap, txSnap, disputesSnap] = await Promise.all([
+            db.collection('users').count().get(),
+            db.collection('assignments').count().get(),
+            db.collection('transactions').where('type', '==', 'PAYOUT').get(),
+            db.collection('assignments').where('status', '==', 'DISPUTED').count().get()
+        ]);
+
+        let grossPayouts = 0;
+        let platformEarnings = 0;
+        txSnap.forEach(d => { grossPayouts += Number(d.data().amount || 0); });
+
+        const earnSnap = await db.collection('assignments').where('status', '==', 'COMPLETED').get();
+        earnSnap.forEach(d => { platformEarnings += Number(d.data().platformEarnings || 0); });
+
+        res.json({
+            totalUsers: usersSnap.data().count,
+            totalAssignments: asnSnap.data().count,
+            openDisputes: disputesSnap.data().count,
+            grossPayouts: Math.round(grossPayouts),
+            platformEarnings: Math.round(platformEarnings)
+        });
+    } catch (err) {
+        console.error('Admin stats error:', err.message);
+        res.status(500).json({ error: 'Stats unavailable' });
+    }
+});
+
+// --- LIST DISPUTES (open disputes with full context) ---
+app.get('/api/admin/disputes', requireAuth, requireAdmin, async (_req, res) => {
+    try {
+        const snap = await db.collection('assignments')
+            .where('status', '==', 'DISPUTED')
+            .limit(100)
+            .get();
+        const disputes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        // Sort by disputedAt desc client-side (avoids needing another index)
+        disputes.sort((a, b) => (b.disputedAt?._seconds || 0) - (a.disputedAt?._seconds || 0));
+        res.json(disputes);
+    } catch (err) {
+        console.error('List disputes error:', err.message);
+        res.status(500).json({ error: 'Could not fetch disputes' });
+    }
+});
+
+// --- RESOLVE DISPUTE (admin pays writer, refunds seeker, or splits) ---
+// body: { resolution: 'RELEASE_WRITER' | 'REFUND_SEEKER' | 'SPLIT', writerShare?: 0..1, note?: string }
+app.post('/api/admin/disputes/:id/resolve', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const { resolution, writerShare, note } = req.body;
+        if (!['RELEASE_WRITER', 'REFUND_SEEKER', 'SPLIT'].includes(resolution)) {
+            return res.status(400).json({ error: 'Invalid resolution' });
+        }
+        const share = resolution === 'SPLIT' ? Number(writerShare) : (resolution === 'RELEASE_WRITER' ? 1 : 0);
+        if (Number.isNaN(share) || share < 0 || share > 1) {
+            return res.status(400).json({ error: 'writerShare must be 0..1' });
+        }
+
+        const assignmentRef = db.collection('assignments').doc(req.params.id);
+
+        const result = await db.runTransaction(async (t) => {
+            const snap = await t.get(assignmentRef);
+            if (!snap.exists) { const e = new Error('Assignment not found'); e.code = 'NOT_FOUND'; throw e; }
+            const asn = snap.data();
+            if (asn.status !== 'DISPUTED') {
+                const e = new Error('Assignment is not under dispute'); e.code = 'BAD_STATE'; throw e;
+            }
+
+            const budget = Number(asn.budget || 0);
+            const writerPayout = Math.round(budget * share);
+            const seekerRefund = budget - writerPayout;
+
+            // Pay writer (if any)
+            if (writerPayout > 0 && asn.activeWriterId) {
+                const writerWallet = db.collection('wallets').doc(asn.activeWriterId);
+                t.set(writerWallet, { userId: asn.activeWriterId, balance: FieldValue.increment(writerPayout) }, { merge: true });
+                t.set(db.collection('transactions').doc(), {
+                    assignmentId: req.params.id,
+                    receiverId: asn.activeWriterId,
+                    amount: writerPayout,
+                    type: 'DISPUTE_PAYOUT',
+                    status: 'COMPLETED',
+                    timestamp: FieldValue.serverTimestamp()
+                });
+            }
+
+            // Refund seeker (if any)
+            if (seekerRefund > 0) {
+                const seekerWallet = db.collection('wallets').doc(asn.seekerId);
+                t.set(seekerWallet, { userId: asn.seekerId, balance: FieldValue.increment(seekerRefund) }, { merge: true });
+                t.set(db.collection('transactions').doc(), {
+                    assignmentId: req.params.id,
+                    receiverId: asn.seekerId,
+                    amount: seekerRefund,
+                    type: 'DISPUTE_REFUND',
+                    status: 'COMPLETED',
+                    timestamp: FieldValue.serverTimestamp()
+                });
+            }
+
+            t.update(assignmentRef, {
+                status: writerPayout > 0 ? 'COMPLETED' : 'CANCELLED',
+                disputeResolution: resolution,
+                disputeWriterShare: share,
+                disputeResolvedAt: FieldValue.serverTimestamp(),
+                disputeResolvedBy: req.user.uid,
+                disputeNote: String(note || '').substring(0, 500)
+            });
+
+            return { writerId: asn.activeWriterId, seekerId: asn.seekerId, writerPayout, seekerRefund, title: asn.title };
+        });
+
+        // Audit + notifications
+        await db.collection('events').add({
+            service: 'DISPUTE',
+            description: `Dispute resolved on #${req.params.id} by admin ${req.user.uid} (${resolution})`,
+            status: 'INFO',
+            timestamp: FieldValue.serverTimestamp()
+        });
+
+        if (result.writerId) {
+            createNotification(result.writerId, {
+                type: 'DISPUTE_RESOLVED',
+                title: result.writerPayout > 0 ? '✅ Dispute resolved — funds released' : 'Dispute resolved',
+                body: result.writerPayout > 0 ? `₹${result.writerPayout.toLocaleString()} credited to your wallet` : 'No payout was issued.',
+                link: `/apps/writer-mobile/writer.html#wallet`,
+                meta: { assignmentId: req.params.id }
+            });
+        }
+        createNotification(result.seekerId, {
+            type: 'DISPUTE_RESOLVED',
+            title: result.seekerRefund > 0 ? '✅ Dispute resolved — refund issued' : 'Dispute resolved',
+            body: result.seekerRefund > 0 ? `₹${result.seekerRefund.toLocaleString()} refunded to your wallet` : 'Funds released to writer.',
+            link: `/apps/seeker-web/wallet.html`,
+            meta: { assignmentId: req.params.id }
+        });
+
+        res.json({ message: 'Dispute resolved', ...result });
+    } catch (err) {
+        const code = err.code === 'NOT_FOUND' ? 404 : err.code === 'BAD_STATE' ? 409 : 400;
+        console.error('Resolve dispute error:', err.message);
+        res.status(code).json({ error: err.message });
+    }
+});
+
+// --- LIST USERS (search by email/name, paginated) ---
+app.get('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const limit = Math.min(Number(req.query.limit) || 50, 100);
+        const search = String(req.query.search || '').trim().toLowerCase();
+        const snap = await db.collection('users').limit(500).get();
+        let users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (search) {
+            users = users.filter(u =>
+                (u.email || '').toLowerCase().includes(search) ||
+                (u.name || '').toLowerCase().includes(search) ||
+                (u.cityNormalized || '').includes(search)
+            );
+        }
+        users = users.slice(0, limit).map(u => ({
+            id: u.id, email: u.email, name: u.name, role: u.role,
+            city: u.city, pincode: u.pincode, banned: !!u.banned,
+            metrics: u.metrics || null,
+            subscription: u.subscription || null,
+            writerSubscription: u.writerSubscription || null,
+            createdAt: u.createdAt || null
+        }));
+        res.json(users);
+    } catch (err) {
+        console.error('List users error:', err.message);
+        res.status(500).json({ error: 'Could not fetch users' });
+    }
+});
+
+// --- BAN / UNBAN USER ---
+app.post('/api/admin/users/:uid/ban', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const banned = !!req.body.banned;
+        const reason = String(req.body.reason || '').substring(0, 300);
+        if (req.params.uid === req.user.uid) {
+            return res.status(400).json({ error: 'You cannot ban yourself' });
+        }
+        await db.collection('users').doc(req.params.uid).set({
+            banned, bannedReason: banned ? reason : null,
+            bannedAt: banned ? FieldValue.serverTimestamp() : null,
+            bannedBy: banned ? req.user.uid : null
+        }, { merge: true });
+
+        // Revoke active sessions when banning
+        if (banned) {
+            try { await admin.auth().revokeRefreshTokens(req.params.uid); } catch (_) {}
+        }
+
+        await db.collection('events').add({
+            service: 'ADMIN',
+            description: `${banned ? 'BANNED' : 'UNBANNED'} user ${req.params.uid} by ${req.user.uid}${reason ? ' — ' + reason : ''}`,
+            status: banned ? 'WARNING' : 'INFO',
+            timestamp: FieldValue.serverTimestamp()
+        });
+
+        res.json({ uid: req.params.uid, banned });
+    } catch (err) {
+        console.error('Ban user error:', err.message);
+        res.status(500).json({ error: 'Could not update user' });
+    }
+});
+
+// --- RECENT TRANSACTIONS (payouts/refunds/topups for monitoring) ---
+app.get('/api/admin/transactions', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const limit = Math.min(Number(req.query.limit) || 50, 200);
+        const type = String(req.query.type || '').toUpperCase();
+        let q = db.collection('transactions').orderBy('timestamp', 'desc').limit(limit);
+        if (type) q = db.collection('transactions').where('type', '==', type).orderBy('timestamp', 'desc').limit(limit);
+        const snap = await q.get();
+        res.json(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (err) {
+        console.error('Admin tx error:', err.message);
+        res.status(500).json({ error: 'Could not fetch transactions' });
     }
 });
 

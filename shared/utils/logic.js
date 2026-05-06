@@ -223,6 +223,13 @@ window.registerUser = async function(event) {
         return;
     }
 
+    // Password strength — 8+ chars, ≥1 uppercase, ≥2 lowercase, ≥1 special
+    const pwdCheck = Writely.validatePassword(password);
+    if (!pwdCheck.ok) {
+        alert('Weak password:\n• ' + pwdCheck.errors.join('\n• '));
+        return;
+    }
+
     try {
         if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = "Creating account..."; }
         const userCredential = await firebase.auth().createUserWithEmailAndPassword(email, password);
@@ -354,6 +361,28 @@ Writely.getJobFeedPage = async function({ limit = 20, after = null } = {}) {
         console.error("Job Feed Error:", err);
         return { jobs: [], nextCursor: null };
     }
+};
+
+/**
+ * Download an attachment the seeker uploaded with the assignment.
+ * Only works if the current user is the seeker or the hired writer.
+ *
+ * Opens a new tab with a short-lived (15 min) signed URL and forces a download
+ * with the original filename.
+ */
+Writely.downloadAttachment = async function(assignmentId, index) {
+    const user = firebase.auth().currentUser;
+    if (!user) throw new Error('Please sign in to download');
+
+    // We can't set Authorization on a plain <a> — so fetch with auth → follow redirect → open
+    const res = await this.apiFetch(`/assignments/${encodeURIComponent(assignmentId)}/attachments/${index}/download`);
+    if (!res.ok) {
+        const msg = await res.text().catch(() => 'Download failed');
+        throw new Error(msg || `Download failed (${res.status})`);
+    }
+    // Server returns a 302 redirect to the signed Storage URL; fetch follows it automatically,
+    // so res.url is now the final signed URL. Open it to trigger the download.
+    window.open(res.url, '_blank');
 };
 
 Writely.submitBid = async function(assignmentId, bidData) {
@@ -1079,6 +1108,76 @@ Writely.pushNotify = function(title, body) {
     }
 };
 
+// --- PASSWORD POLICY ---
+// Rules: min 8 chars, ≥1 uppercase, ≥2 lowercase, ≥1 number, ≥1 special character.
+Writely.validatePassword = function(pwd) {
+    const errors = [];
+    const s = String(pwd || '');
+    if (s.length < 8) errors.push('Must be at least 8 characters long');
+    if (!/[A-Z]/.test(s)) errors.push('Must contain at least 1 uppercase letter');
+    const lower = (s.match(/[a-z]/g) || []).length;
+    if (lower < 2) errors.push('Must contain at least 2 lowercase letters');
+    if (!/[0-9]/.test(s)) errors.push('Must contain at least 1 number');
+    if (!/[^A-Za-z0-9]/.test(s)) errors.push('Must contain at least 1 special character (e.g. !@#$%^&*)');
+    return { ok: errors.length === 0, errors };
+};
+
+// Attach a live strength meter under any password <input>.
+// Usage (optional): Writely.attachPasswordMeter(document.getElementById('password'));
+Writely.attachPasswordMeter = function(input) {
+    if (!input || input.dataset.meterAttached) return;
+    input.dataset.meterAttached = '1';
+
+    const hint = document.createElement('div');
+    hint.style.cssText = 'margin-top:6px; font-size:12px; line-height:1.5; color:#64748b;';
+    hint.innerHTML = `
+        <div data-rule="len">• At least 8 characters</div>
+        <div data-rule="upper">• 1 uppercase letter</div>
+        <div data-rule="lower">• 2 lowercase letters</div>
+        <div data-rule="number">• 1 number</div>
+        <div data-rule="special">• 1 special character</div>`;
+    input.insertAdjacentElement('afterend', hint);
+
+    const update = () => {
+        const s = input.value;
+        const checks = {
+            len: s.length >= 8,
+            upper: /[A-Z]/.test(s),
+            lower: (s.match(/[a-z]/g) || []).length >= 2,
+            number: /[0-9]/.test(s),
+            special: /[^A-Za-z0-9]/.test(s)
+        };
+        Object.entries(checks).forEach(([k, pass]) => {
+            const row = hint.querySelector(`[data-rule="${k}"]`);
+            if (row) {
+                row.style.color = pass ? '#10b981' : '#64748b';
+                row.textContent = (pass ? '✓ ' : '• ') + row.textContent.replace(/^[•✓]\s*/, '');
+            }
+        });
+    };
+    input.addEventListener('input', update);
+    update();
+};
+
+// Auto-attach the meter ONLY on registration / change-password screens
+// (not on login — confusing to show rules on a sign-in form).
+document.addEventListener('DOMContentLoaded', () => {
+    const el = document.getElementById('password');
+    if (!el || el.type !== 'password') return;
+
+    // Heuristic: enable the meter only when one of these is true:
+    //   1. The input has data-strength="true"
+    //   2. The page URL points at register / signup / change-password
+    //   3. There's a #registerForm or [data-form="register"] on the page
+    const isRegisterPage = /register|signup|change-password/i.test(location.pathname);
+    const hasRegisterForm = !!document.getElementById('registerForm') || !!document.querySelector('[data-form="register"]');
+    const optedIn = el.dataset.strength === 'true';
+
+    if (isRegisterPage || hasRegisterForm || optedIn) {
+        Writely.attachPasswordMeter(el);
+    }
+});
+
 // Global Exposure
 window.logout = Writely.logout;
 Writely.registerUser = window.registerUser;
@@ -1257,6 +1356,52 @@ window.Writely = Writely;
         setupTopNav();
         setupDashboardSidebar();
         injectPricingLink();
+        injectPwaTags();
+        registerServiceWorker();
+    }
+
+    // --- PWA: inject manifest + theme tags if missing ---
+    function injectPwaTags() {
+        try {
+            const head = document.head;
+            if (!head) return;
+            if (!head.querySelector('link[rel="manifest"]')) {
+                const m = document.createElement('link');
+                m.rel = 'manifest';
+                m.href = '/manifest.webmanifest';
+                head.appendChild(m);
+            }
+            if (!head.querySelector('meta[name="theme-color"]')) {
+                const t = document.createElement('meta');
+                t.name = 'theme-color';
+                t.content = '#6366f1';
+                head.appendChild(t);
+            }
+            if (!head.querySelector('meta[name="apple-mobile-web-app-capable"]')) {
+                const a = document.createElement('meta');
+                a.name = 'apple-mobile-web-app-capable';
+                a.content = 'yes';
+                head.appendChild(a);
+            }
+        } catch (_) { /* noop */ }
+    }
+
+    // --- PWA: register the service worker (skip on localhost over HTTP, file://, and inside iframes) ---
+    function registerServiceWorker() {
+        if (!('serviceWorker' in navigator)) return;
+        if (window.top !== window.self) return;                  // don't register from iframes
+        if (location.protocol === 'file:') return;
+        // Allow http on localhost (browsers permit SWs there)
+        if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
+
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                .then(reg => {
+                    // Re-check for updates every 60 minutes
+                    setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000);
+                })
+                .catch(err => console.warn('SW registration failed:', err.message));
+        });
     }
 
     if (document.readyState === 'loading') {

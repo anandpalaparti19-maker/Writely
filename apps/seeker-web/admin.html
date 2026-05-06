@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin · Writely</title>
+<link rel="stylesheet" href="../../shared/utils/style.css">
+<style>
+  :root {
+    --bg: #f6f7fb; --card: #fff; --border: #e5e7eb;
+    --text: #0f172a; --muted: #64748b; --primary: #6366f1;
+    --green: #10b981; --red: #ef4444; --amber: #f59e0b;
+  }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, system-ui, sans-serif; margin: 0; }
+  .shell { max-width: 1200px; margin: 0 auto; padding: 24px 16px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .stat-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .stat-value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+  .stat.warn .stat-value { color: var(--red); }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; flex-wrap: wrap; }
+  .tab { padding: 10px 14px; cursor: pointer; border: none; background: none; color: var(--muted); font-weight: 500; border-bottom: 2px solid transparent; }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 14px; vertical-align: top; }
+  th { background: #f8fafc; font-size: 12px; text-transform: uppercase; color: var(--muted); letter-spacing: .04em; }
+  tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .badge.role-ADMIN { background: #ede9fe; color: #6d28d9; }
+  .badge.role-WRITER { background: #dcfce7; color: #15803d; }
+  .badge.role-SEEKER { background: #dbeafe; color: #1d4ed8; }
+  .badge.banned { background: #fee2e2; color: #991b1b; }
+  .btn { padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-size: 12px; font-weight: 500; }
+  .btn:hover { background: #f1f5f9; }
+  .btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .btn.danger { background: var(--red); color: #fff; border-color: var(--red); }
+  .btn.success { background: var(--green); color: #fff; border-color: var(--green); }
+  .btn.warn { background: var(--amber); color: #fff; border-color: var(--amber); }
+  .row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  input[type="text"], select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; }
+  .empty { text-align: center; padding: 40px; color: var(--muted); }
+  .loading { text-align: center; padding: 24px; color: var(--muted); }
+  .dispute-reason { background: #fef3c7; padding: 8px 10px; border-radius: 6px; font-size: 13px; margin-top: 6px; }
+  details > summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+  .gate { text-align: center; padding: 80px 20px; }
+  .gate h2 { color: var(--red); }
+  @media (max-width: 720px) {
+    table, thead, tbody, th, td, tr { display: block; }
+    thead { display: none; }
+    tr { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; padding: 8px; }
+    td { border: none; padding: 4px 0; }
+    td::before { content: attr(data-label); font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; display: block; }
+  }
+</style>
+</head>
+<body>
+<div id="root" class="shell">
+  <div class="loading">Verifying admin access…</div>
+</div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="../../shared/utils/logic.js"></script>
+
+<script>
+  const root = document.getElementById('root');
+
+  function gate(msg) {
+    root.innerHTML = `<div class="gate"><h2>Access denied</h2><p>${msg}</p><a href="login.html">Sign in</a></div>`;
+  }
+
+  async function api(path, opts = {}) {
+    if (!Writely || !Writely.apiFetch) throw new Error('apiFetch helper missing');
+    const res = await Writely.apiFetch(path, opts);
+    if (!res.ok) {
+      const t = await res.text().catch(() => '');
+      throw new Error(`${res.status} ${t || res.statusText}`);
+    }
+    return res.json();
+  }
+
+  function fmtINR(n) { return '₹' + Number(n || 0).toLocaleString('en-IN'); }
+  function fmtTs(ts) {
+    if (!ts) return '—';
+    const ms = ts._seconds ? ts._seconds * 1000 : (ts.seconds ? ts.seconds * 1000 : Date.parse(ts));
+    if (!ms) return '—';
+    return new Date(ms).toLocaleString();
+  }
+  function escapeHtml(s) { return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  function shell() {
+    root.innerHTML = `
+      <h1>Admin Dashboard</h1>
+      <p class="sub">Writely platform monitoring & moderation</p>
+      <div id="stats" class="stats"></div>
+      <div class="tabs">
+        <button class="tab active" data-tab="disputes">Disputes</button>
+        <button class="tab" data-tab="users">Users</button>
+        <button class="tab" data-tab="transactions">Transactions</button>
+        <button class="tab" data-tab="events">Audit Log</button>
+      </div>
+      <div id="panel-disputes" class="panel active"></div>
+      <div id="panel-users" class="panel"></div>
+      <div id="panel-transactions" class="panel"></div>
+      <div id="panel-events" class="panel"></div>
+    `;
+    root.querySelectorAll('.tab').forEach(t => {
+      t.addEventListener('click', () => {
+        root.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+        root.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        document.getElementById('panel-' + t.dataset.tab).classList.add('active');
+        loadTab(t.dataset.tab);
+      });
+    });
+  }
+
+  async function loadStats() {
+    const el = document.getElementById('stats');
+    el.innerHTML = '<div class="loading">Loading stats…</div>';
+    try {
+      const s = await api('/admin/stats');
+      el.innerHTML = `
+        <div class="stat"><div class="stat-label">Total Users</div><div class="stat-value">${s.totalUsers}</div></div>
+        <div class="stat"><div class="stat-label">Assignments</div><div class="stat-value">${s.totalAssignments}</div></div>
+        <div class="stat ${s.openDisputes ? 'warn' : ''}"><div class="stat-label">Open Disputes</div><div class="stat-value">${s.openDisputes}</div></div>
+        <div class="stat"><div class="stat-label">Gross Payouts</div><div class="stat-value">${fmtINR(s.grossPayouts)}</div></div>
+        <div class="stat"><div class="stat-label">Platform Earnings</div><div class="stat-value">${fmtINR(s.platformEarnings)}</div></div>
+      `;
+    } catch (e) { el.innerHTML = `<div class="empty">Stats failed: ${e.message}</div>`; }
+  }
+
+  async function loadDisputes() {
+    const el = document.getElementById('panel-disputes');
+    el.innerHTML = '<div class="loading">Loading disputes…</div>';
+    try {
+      const list = await api('/admin/disputes');
+      if (!list.length) { el.innerHTML = '<div class="empty">🎉 No open disputes.</div>'; return; }
+      el.innerHTML = `<table><thead><tr>
+        <th>Title</th><th>Budget</th><th>Seeker / Writer</th><th>Reason</th><th>Opened</th><th>Action</th>
+      </tr></thead><tbody>${list.map(d => `
+        <tr data-id="${d.id}">
+          <td data-label="Title">${escapeHtml(d.title || d.id)}</td>
+          <td data-label="Budget">${fmtINR(d.budget)}</td>
+          <td data-label="Parties">
+            <div><small>S:</small> ${escapeHtml(d.seekerId || '—')}</div>
+            <div><small>W:</small> ${escapeHtml(d.activeWriterId || '—')}</div>
+          </td>
+          <td data-label="Reason"><div class="dispute-reason">${escapeHtml(d.disputeReason || '')}</div></td>
+          <td data-label="Opened">${fmtTs(d.disputedAt)}</td>
+          <td data-label="Action"><div class="row-actions">
+            <button class="btn success" data-act="RELEASE_WRITER">Pay Writer</button>
+            <button class="btn warn" data-act="SPLIT">Split 50/50</button>
+            <button class="btn danger" data-act="REFUND_SEEKER">Refund Seeker</button>
+          </div></td>
+        </tr>
+      `).join('')}</tbody></table>`;
+
+      el.querySelectorAll('button[data-act]').forEach(b => {
+        b.addEventListener('click', async () => {
+          const tr = b.closest('tr'); const id = tr.dataset.id; const act = b.dataset.act;
+          const note = prompt(`Resolution note for "${act}":`, '') || '';
+          if (!confirm(`Confirm ${act} for #${id}?`)) return;
+          b.disabled = true; b.textContent = '…';
+          try {
+            await api(`/admin/disputes/${encodeURIComponent(id)}/resolve`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ resolution: act, writerShare: act === 'SPLIT' ? 0.5 : undefined, note })
+            });
+            tr.remove();
+            loadStats();
+          } catch (e) { alert('Failed: ' + e.message); b.disabled = false; b.textContent = act; }
+        });
+      });
+    } catch (e) { el.innerHTML = `<div class="empty">Failed: ${e.message}</div>`; }
+  }
+
+  async function loadUsers() {
+    const el = document.getElementById('panel-users');
+    el.innerHTML = `
+      <div class="toolbar">
+        <input id="userSearch" type="text" placeholder="Search by email, name, city…" />
+        <button class="btn primary" id="userSearchBtn">Search</button>
+      </div>
+      <div id="userList"></div>
+    `;
+    const run = async () => {
+      const q = document.getElementById('userSearch').value.trim();
+      const list = document.getElementById('userList');
+      list.innerHTML = '<div class="loading">Loading users…</div>';
+      try {
+        const users = await api(`/admin/users?search=${encodeURIComponent(q)}`);
+        if (!users.length) { list.innerHTML = '<div class="empty">No users found.</div>'; return; }
+        list.innerHTML = `<table><thead><tr>
+          <th>Email / Name</th><th>Role</th><th>Location</th><th>Rating</th><th>Plan</th><th>Status</th><th>Action</th>
+        </tr></thead><tbody>${users.map(u => `
+          <tr data-uid="${u.id}">
+            <td data-label="User">
+              <div><strong>${escapeHtml(u.name || '—')}</strong></div>
+              <div style="color:var(--muted);font-size:12px">${escapeHtml(u.email || '')}</div>
+            </td>
+            <td data-label="Role"><span class="badge role-${u.role || 'SEEKER'}">${u.role || 'SEEKER'}</span></td>
+            <td data-label="Location">${escapeHtml(u.city || '—')}<br><small>${escapeHtml(u.pincode || '')}</small></td>
+            <td data-label="Rating">${u.metrics?.avgRating ? `★${u.metrics.avgRating} (${u.metrics.reviewCount})` : '—'}</td>
+            <td data-label="Plan">${u.subscription?.type || u.writerSubscription?.type || '—'}</td>
+            <td data-label="Status">${u.banned ? '<span class="badge banned">BANNED</span>' : '<span style="color:var(--green)">Active</span>'}</td>
+            <td data-label="Action"><div class="row-actions">
+              <button class="btn ${u.banned ? 'success' : 'danger'}" data-banned="${u.banned ? '1' : '0'}">${u.banned ? 'Unban' : 'Ban'}</button>
+            </div></td>
+          </tr>
+        `).join('')}</tbody></table>`;
+
+        list.querySelectorAll('button[data-banned]').forEach(b => {
+          b.addEventListener('click', async () => {
+            const tr = b.closest('tr'); const uid = tr.dataset.uid;
+            const willBan = b.dataset.banned === '0';
+            const reason = willBan ? (prompt('Ban reason (visible to admins):') || '') : '';
+            if (willBan && !reason) return;
+            if (!confirm(`${willBan ? 'Ban' : 'Unban'} user ${uid}?`)) return;
+            try {
+              await api(`/admin/users/${encodeURIComponent(uid)}/ban`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ banned: willBan, reason })
+              });
+              run();
+            } catch (e) { alert('Failed: ' + e.message); }
+          });
+        });
+      } catch (e) { list.innerHTML = `<div class="empty">Failed: ${e.message}</div>`; }
+    };
+    document.getElementById('userSearchBtn').addEventListener('click', run);
+    document.getElementById('userSearch').addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
+    run();
+  }
+
+  async function loadTransactions() {
+    const el = document.getElementById('panel-transactions');
+    el.innerHTML = `
+      <div class="toolbar">
+        <select id="txType">
+          <option value="">All types</option>
+          <option value="PAYOUT">Payouts</option>
+          <option value="WALLET_TOPUP">Top-ups</option>
+          <option value="WITHDRAWAL">Withdrawals</option>
+          <option value="DISPUTE_PAYOUT">Dispute payouts</option>
+          <option value="DISPUTE_REFUND">Dispute refunds</option>
+          <option value="ESCROW_LOCK">Escrow locks</option>
+        </select>
+        <button class="btn primary" id="txReload">Reload</button>
+      </div>
+      <div id="txList"></div>
+    `;
+    const run = async () => {
+      const type = document.getElementById('txType').value;
+      const list = document.getElementById('txList');
+      list.innerHTML = '<div class="loading">Loading…</div>';
+      try {
+        const txs = await api(`/admin/transactions?limit=100${type ? '&type=' + type : ''}`);
+        if (!txs.length) { list.innerHTML = '<div class="empty">No transactions.</div>'; return; }
+        list.innerHTML = `<table><thead><tr>
+          <th>When</th><th>Type</th><th>Amount</th><th>Receiver</th><th>Assignment</th><th>Status</th>
+        </tr></thead><tbody>${txs.map(t => `
+          <tr>
+            <td data-label="When">${fmtTs(t.timestamp)}</td>
+            <td data-label="Type"><span class="badge">${escapeHtml(t.type || '')}</span></td>
+            <td data-label="Amount" style="font-weight:600;color:${(t.amount || 0) < 0 ? 'var(--red)' : 'var(--green)'}">${fmtINR(t.amount)}</td>
+            <td data-label="Receiver"><small>${escapeHtml(t.receiverId || '—')}</small></td>
+            <td data-label="Assignment"><small>${escapeHtml(t.assignmentId || '—')}</small></td>
+            <td data-label="Status">${escapeHtml(t.status || '—')}</td>
+          </tr>
+        `).join('')}</tbody></table>`;
+      } catch (e) { list.innerHTML = `<div class="empty">Failed: ${e.message}</div>`; }
+    };
+    document.getElementById('txReload').addEventListener('click', run);
+    document.getElementById('txType').addEventListener('change', run);
+    run();
+  }
+
+  async function loadEvents() {
+    const el = document.getElementById('panel-events');
+    el.innerHTML = '<div class="loading">Loading audit log…</div>';
+    try {
+      const events = await api('/events');
+      if (!events.length) { el.innerHTML = '<div class="empty">No events yet.</div>'; return; }
+      el.innerHTML = `<table><thead><tr>
+        <th>When</th><th>Service</th><th>Status</th><th>Description</th>
+      </tr></thead><tbody>${events.map(e => `
+        <tr>
+          <td data-label="When">${fmtTs(e.timestamp)}</td>
+          <td data-label="Service"><span class="badge">${escapeHtml(e.service || '')}</span></td>
+          <td data-label="Status">${escapeHtml(e.status || '')}</td>
+          <td data-label="Description">${escapeHtml(e.description || '')}</td>
+        </tr>
+      `).join('')}</tbody></table>`;
+    } catch (e) { el.innerHTML = `<div class="empty">Failed: ${e.message}</div>`; }
+  }
+
+  function loadTab(tab) {
+    if (tab === 'disputes') loadDisputes();
+    else if (tab === 'users') loadUsers();
+    else if (tab === 'transactions') loadTransactions();
+    else if (tab === 'events') loadEvents();
+  }
+
+  firebase.auth().onAuthStateChanged(async user => {
+    if (!user) return gate('You must be signed in as an admin.');
+    try {
+      const me = await firebase.firestore().collection('users').doc(user.uid).get();
+      if (!me.exists || me.data().role !== 'ADMIN') return gate('This page is for admins only.');
+      shell();
+      loadStats();
+      loadDisputes();
+    } catch (e) {
+      gate('Failed to verify: ' + e.message);
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Offline — Writely</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; margin: 0;
+         display: flex; align-items: center; justify-content: center;
+         min-height: 100vh; background: #f6f7fb; color: #0f172a; padding: 24px; text-align: center; }
+  .card { max-width: 420px; background: #fff; border-radius: 16px;
+          padding: 32px; box-shadow: 0 8px 24px rgba(0,0,0,.06); }
+  h1 { font-size: 24px; margin: 16px 0 8px; }
+  p { color: #64748b; margin: 0 0 20px; line-height: 1.5; }
+  button { padding: 10px 20px; background: #6366f1; color: #fff;
+           border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
+  .icon { font-size: 48px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">📡</div>
+    <h1>You're offline</h1>
+    <p>Writely needs an internet connection. Please check your network and try again.</p>
+    <button onclick="location.reload()">Retry</button>
+  </div>
+</body>
+</html>

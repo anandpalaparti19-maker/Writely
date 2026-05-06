@@ -1,0 +1,24 @@
+{
+  "name": "Writely — Academic Marketplace",
+  "short_name": "Writely",
+  "description": "Hire vetted academic writers nearby. Secure escrow payments, real-time chat, transparent reviews.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#6366f1",
+  "lang": "en-IN",
+  "categories": ["education", "productivity", "business"],
+  "icons": [
+    { "src": "/shared/assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/shared/assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/shared/assets/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Post Assignment", "short_name": "Post", "url": "/apps/seeker-web/dashboard.html", "description": "Post a new assignment" },
+    { "name": "Browse Jobs", "short_name": "Jobs", "url": "/apps/writer-mobile/browse-jobs.html", "description": "Find writing jobs nearby" },
+    { "name": "Messages", "short_name": "Chat", "url": "/apps/seeker-web/messages.html", "description": "Open chats" },
+    { "name": "Wallet", "short_name": "Wallet", "url": "/apps/seeker-web/wallet.html", "description": "View balance & transactions" }
+  ]
+}

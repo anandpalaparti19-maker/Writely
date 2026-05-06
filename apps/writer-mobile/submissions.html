@@ -158,6 +158,27 @@
                         }
                     }
 
+                    // Build attachment download buttons (only visible to the assigned writer)
+                    const attachments = Array.isArray(job.attachments) ? job.attachments : [];
+                    let attachmentsHtml = '';
+                    if (isAssignedToMe && attachments.length > 0) {
+                        const items = attachments.map((att, idx) => `
+                            <button type="button"
+                                    class="download-attachment"
+                                    data-assignment="${job.id}" data-index="${idx}"
+                                    style="display:inline-flex; align-items:center; gap:6px; background:var(--ink-tint); color:var(--ink-purple); border:1px solid var(--ink-purple); padding:6px 12px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; margin:2px;"
+                                    title="Download ${att.filename || 'attachment'}">
+                                📎 ${(att.filename || 'file').length > 24 ? (att.filename || 'file').slice(0, 22) + '…' : (att.filename || 'file')}
+                            </button>
+                        `).join('');
+                        attachmentsHtml = `
+                            <div style="grid-column: 1 / -1; padding-top:12px; border-top:1px dashed var(--border);">
+                                <div style="font-size:11px; font-weight:700; color:var(--text-tertiary); text-transform:uppercase; margin-bottom:6px;">Assignment Files (${attachments.length})</div>
+                                ${items}
+                            </div>
+                        `;
+                    }
+
                     const card = document.createElement('div');
                     card.className = 'submission-card';
                     card.innerHTML = `
@@ -169,6 +190,7 @@
                         <div><button class="btn ${isAssignedToMe ? 'btn-primary' : 'btn-secondary'}" style="padding:8px 16px; font-size:13px;" ${job.status === 'COMPLETED' ? 'disabled' : ''}>
                             ${job.status === 'COMPLETED' ? 'Paid' : (isAssignedToMe ? 'Deliver Work' : 'View Bid')}
                         </button></div>
+                        ${attachmentsHtml}
                     `;
                     container.appendChild(card);
                 });
@@ -178,6 +200,26 @@
                 container.innerHTML = `<div style="text-align:center; padding:40px; color:#EF4444;">Failed to load submissions.</div>`;
             }
         }
+
+        // Delegated click handler — works for all .download-attachment buttons
+        // regardless of when they're added to the DOM.
+        document.addEventListener('click', async (e) => {
+            const btn = e.target.closest('.download-attachment');
+            if (!btn) return;
+            e.preventDefault();
+            const { assignment, index } = btn.dataset;
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Preparing…';
+            try {
+                await Writely.downloadAttachment(assignment, Number(index));
+            } catch (err) {
+                alert('Could not download: ' + (err.message || err));
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        });
     </script>
 </body>
 </html>

@@ -9,7 +9,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-analytics-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
     <script src="../../shared/utils/logic.js" defer></script>
     <style>
         body { background-color: var(--bg-secondary); }
@@ -202,12 +203,20 @@
     <script>
         let currentUserId = null;
         let currentAssignmentId = null;
+        let unsubscribeMessages = null;
+
+        function escapeHtml(s) {
+            return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
 
         document.addEventListener("DOMContentLoaded", () => {
             firebase.auth().onAuthStateChanged(user => {
                 if (user) {
                     currentUserId = user.uid;
                     loadChatList(user.uid);
+                    // Deep link: /messages.html#<assignmentId> auto-opens that chat
+                    const hashId = (window.location.hash || '').replace('#', '').trim();
+                    if (hashId) setTimeout(() => openChat(hashId, '…'), 400);
                 } else {
                     window.location.href = 'index.html';
                 }
@@ -218,91 +227,106 @@
             });
         });
 
+        // Load all assignments where the user is either the seeker OR the active writer.
+        // Show in any state where chat is meaningful (BIDDING, ACTIVE, REVIEW, COMPLETED, DISPUTED).
         async function loadChatList(userId) {
+            const container = document.getElementById('chatListContainer');
             try {
-                // Fetch active assignments for this user to list as chat channels
-                const snapshot = await firebase.firestore().collection('assignments')
-                    .where('seekerId', '==', userId)
-                    .where('status', '==', 'ACTIVE')
-                    .get();
+                const RELEVANT = ['BIDDING', 'ACTIVE', 'REVIEW', 'COMPLETED', 'DISPUTED'];
+                const [seekerSnap, writerSnap] = await Promise.all([
+                    firebase.firestore().collection('assignments')
+                        .where('seekerId', '==', userId).get(),
+                    firebase.firestore().collection('assignments')
+                        .where('activeWriterId', '==', userId).get()
+                ]);
 
-                const container = document.getElementById('chatListContainer');
-                if (snapshot.empty) {
-                    container.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-tertiary);">No active chats.</div>';
+                const seen = new Set();
+                const items = [];
+                [seekerSnap, writerSnap].forEach(snap => snap.forEach(doc => {
+                    if (seen.has(doc.id)) return;
+                    const a = doc.data();
+                    if (!RELEVANT.includes(a.status)) return;
+                    seen.add(doc.id);
+                    items.push({ id: doc.id, ...a, isSeeker: a.seekerId === userId });
+                }));
+
+                // Newest first
+                items.sort((x, y) => (y.createdAt?.toMillis?.() || 0) - (x.createdAt?.toMillis?.() || 0));
+
+                if (items.length === 0) {
+                    container.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-tertiary);">No active chats yet.</div>';
                     return;
                 }
 
-                container.innerHTML = '';
-                snapshot.forEach(doc => {
-                    const job = doc.data();
-                    container.innerHTML += `
-                        <div class="chat-list-item" onclick="openChat('${doc.id}', '${job.title}')">
+                container.innerHTML = items.map(a => {
+                    const role = a.isSeeker ? 'Writer' : 'Seeker';
+                    const initial = (a.title || 'W').charAt(0).toUpperCase();
+                    return `
+                        <div class="chat-list-item" data-id="${a.id}" data-title="${escapeHtml(a.title)}">
                             <div style="display:flex; gap:12px; align-items:center;">
-                                <div style="width:40px; height:40px; border-radius:50%; background:var(--ink-purple); color:white; display:flex; align-items:center; justify-content:center; font-weight:700;">W</div>
-                                <div>
-                                    <div style="font-weight: 600; font-size: 14px;">${job.title}</div>
-                                    <div style="font-size: 12px; color: var(--text-tertiary);">Writer Assigned</div>
+                                <div style="width:40px; height:40px; border-radius:50%; background:var(--ink-purple); color:white; display:flex; align-items:center; justify-content:center; font-weight:700;">${escapeHtml(initial)}</div>
+                                <div style="flex:1; min-width:0;">
+                                    <div style="font-weight: 600; font-size: 14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(a.title || 'Untitled')}</div>
+                                    <div style="font-size: 12px; color: var(--text-tertiary);">${role} · ${a.status}</div>
                                 </div>
                             </div>
                         </div>
                     `;
-                });
-            } catch (err) { console.error("Chat list error:", err); }
-        }
+                }).join('');
 
-        let unsubscribeMessages = null;
+                // Wire up clicks (avoid inline onclick + escaping issues)
+                container.querySelectorAll('.chat-list-item').forEach(el => {
+                    el.addEventListener('click', () => openChat(el.dataset.id, el.dataset.title));
+                });
+            } catch (err) {
+                console.error("Chat list error:", err);
+                container.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-tertiary);">Could not load chats.</div>';
+            }
+        }
 
         function openChat(assignmentId, title) {
             currentAssignmentId = assignmentId;
-            document.getElementById('currentChatName').innerText = title;
+            document.getElementById('currentChatName').innerText = title || 'Conversation';
             document.getElementById('chatInput').disabled = false;
             document.getElementById('sendBtn').disabled = false;
 
-            if (unsubscribeMessages) unsubscribeMessages();
+            // Highlight selected
+            document.querySelectorAll('.chat-list-item').forEach(el => {
+                el.classList.toggle('active', el.dataset.id === assignmentId);
+            });
 
-            unsubscribeMessages = firebase.firestore().collection('messages')
-                .where('assignmentId', '==', assignmentId)
-                .orderBy('createdAt', 'asc')
-                .onSnapshot(snapshot => {
-                    const messagesDiv = document.getElementById('chatMessages');
-                    messagesDiv.innerHTML = '';
-                    snapshot.forEach(doc => {
-                        const msg = doc.data();
-                        const isSent = msg.senderId === currentUserId;
-                        messagesDiv.innerHTML += `
-                            <div class="message ${isSent ? 'message-sent' : 'message-received'}">
-                                ${msg.text}
-                            </div>
-                        `;
-                    });
-                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                });
+            if (unsubscribeMessages) unsubscribeMessages();
+            unsubscribeMessages = Writely.subscribeToMessages(assignmentId, (messages) => {
+                const div = document.getElementById('chatMessages');
+                if (!messages.length) {
+                    div.innerHTML = '<div style="text-align:center; color:var(--text-tertiary); margin-top: 40px;">No messages yet — say hello 👋</div>';
+                    return;
+                }
+                div.innerHTML = messages.map(m => {
+                    const isSent = m.senderId === currentUserId;
+                    return `<div class="message ${isSent ? 'message-sent' : 'message-received'}">${escapeHtml(m.text)}</div>`;
+                }).join('');
+                div.scrollTop = div.scrollHeight;
+            });
         }
 
         async function sendMessage() {
             const input = document.getElementById('chatInput');
             const text = input.value.trim();
-            if (!text || !currentAssignmentId || !currentUserId) return;
+            if (!text || !currentAssignmentId) return;
 
             input.value = '';
-            
             try {
-                await firebase.firestore().collection('messages').add({
-                    assignmentId: currentAssignmentId,
-                    senderId: currentUserId,
-                    text: text,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
+                // Use backend so notification gets dispatched to the other party
+                await Writely.sendMessage(currentAssignmentId, text);
             } catch (err) {
                 console.error("Failed to send message", err);
+                alert('Could not send message: ' + (err.message || err));
+                input.value = text; // restore so user can retry
             }
         }
 
-        function logout() {
-            if(confirm("Are you sure you want to logout?")) {
-                firebase.auth().signOut().then(() => window.location.href = 'index.html');
-            }
-        }
+        function logout() { Writely.logout(); }
     </script>
 </body>
 </html>

@@ -208,7 +208,19 @@
                             <textarea name="deliveryAddress" id="deliveryAddress" rows="2" style="width:100%; padding:14px; border-radius:12px; border:1px solid var(--border);" placeholder="Enter your full shipping address for the courier..."></textarea>
                         </div>
 
-                        <!-- LOCATION (always required — drives nearby-writer matching) -->
+                        <!-- DEADLINE + COLLEGE (required — shown to writers) -->
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
+                            <div>
+                                <label style="display:block; font-size:12px; font-weight:700; color:var(--text-tertiary); margin-bottom:8px; text-transform:uppercase;">Deadline</label>
+                                <input type="datetime-local" name="deadline" id="postDeadline" style="width:100%; padding:14px; border-radius:12px; border:1px solid var(--border);" required>
+                            </div>
+                            <div>
+                                <label style="display:block; font-size:12px; font-weight:700; color:var(--text-tertiary); margin-bottom:8px; text-transform:uppercase;">College / University</label>
+                                <input type="text" name="collegeName" id="postCollegeName" placeholder="e.g. Delhi University" style="width:100%; padding:14px; border-radius:12px; border:1px solid var(--border);" required>
+                            </div>
+                        </div>
+
+                        <!-- PLACE / LOCATION (always required — drives nearby-writer matching) -->
                         <button type="button" id="detectPostLocBtn" style="margin-bottom:12px; padding:10px 16px; border-radius:10px; border:1px dashed var(--ink-purple); background:var(--ink-tint); color:var(--ink-purple); font-weight:600; font-size:13px; cursor:pointer; width:100%;">
                             📍 Detect my location automatically
                         </button>
@@ -316,14 +328,29 @@
         async function openModal() { 
             document.getElementById('postJobModal').style.display = 'flex'; 
             calculateBudget();
-            // Pre-fill city + pincode from the seeker's saved profile so they don't retype
+
+            // Default deadline = 3 days from now, min = 1 hour from now
+            const deadlineEl = document.getElementById('postDeadline');
+            if (deadlineEl) {
+                const pad = n => String(n).padStart(2, '0');
+                const toLocal = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                const now = new Date();
+                const plusOneHr = new Date(now.getTime() + 60 * 60 * 1000);
+                const plus3Days = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+                deadlineEl.min = toLocal(plusOneHr);
+                if (!deadlineEl.value) deadlineEl.value = toLocal(plus3Days);
+            }
+
+            // Pre-fill city + pincode + college from the seeker's saved profile so they don't retype
             try {
                 const profile = await Writely.getUserProfile();
                 if (profile) {
-                    const cityEl = document.getElementById('postCity');
-                    const pinEl  = document.getElementById('postPincode');
-                    if (cityEl && !cityEl.value && profile.city) cityEl.value = profile.city;
-                    if (pinEl  && !pinEl.value  && profile.pincode) pinEl.value = profile.pincode;
+                    const cityEl    = document.getElementById('postCity');
+                    const pinEl     = document.getElementById('postPincode');
+                    const collegeEl = document.getElementById('postCollegeName');
+                    if (cityEl    && !cityEl.value    && profile.city)        cityEl.value = profile.city;
+                    if (pinEl     && !pinEl.value     && profile.pincode)     pinEl.value = profile.pincode;
+                    if (collegeEl && !collegeEl.value && profile.collegeName) collegeEl.value = profile.collegeName;
                 }
             } catch (_) { /* non-critical — user can still type */ }
 

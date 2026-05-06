@@ -652,7 +652,7 @@ app.post('/api/assignments/:id/release', requireAuth, async (req, res) => {
 // --- CREATE ASSIGNMENT ---
 app.post('/api/assignments', requireAuth, upload.array('attachments', 5), async (req, res) => {
     try {
-        const { title, description, budget, pages, deliveryMethod, deliveryAddress, pincode, city } = req.body;
+        const { title, description, budget, pages, deliveryMethod, deliveryAddress, pincode, city, deadline, collegeName } = req.body;
 
         // Validate
         if (!title || title.trim().length < 3) return res.status(400).json({ error: 'Title required (min 3 chars)' });
@@ -661,6 +661,23 @@ app.post('/api/assignments', requireAuth, upload.array('attachments', 5), async 
         if (!Number.isFinite(numBudget) || numBudget < 50 || numBudget > 500000) {
             return res.status(400).json({ error: 'Budget must be ₹50 – ₹500,000' });
         }
+
+        // Deadline — must be a valid future timestamp (at least 30 min ahead)
+        let deadlineTs = null;
+        if (deadline) {
+            const dt = new Date(deadline);
+            if (isNaN(dt.getTime())) return res.status(400).json({ error: 'Invalid deadline format' });
+            if (dt.getTime() < Date.now() + 30 * 60 * 1000) {
+                return res.status(400).json({ error: 'Deadline must be at least 30 minutes in the future' });
+            }
+            deadlineTs = admin.firestore.Timestamp.fromDate(dt);
+        } else {
+            return res.status(400).json({ error: 'Deadline is required' });
+        }
+
+        // College / University — required, capped at 120 chars
+        const cleanCollege = String(collegeName || '').trim().slice(0, 120);
+        if (!cleanCollege) return res.status(400).json({ error: 'College / University name is required' });
 
         // seekerId comes from verified token, NOT request body
         const seekerId = req.user.uid;
@@ -695,6 +712,9 @@ app.post('/api/assignments', requireAuth, upload.array('attachments', 5), async 
             deliveryAddress: (deliveryAddress || '').trim(),
             pincode: cleanPincode || null,                      // e.g. "110001"
             city: cleanCity ? cleanCity.toLowerCase() : null,    // normalised lowercase for matching
+            cityDisplay: cleanCity || null,                      // original casing for UI
+            deadline: deadlineTs,                                // Firestore Timestamp — when seeker needs it by
+            collegeName: cleanCollege,                           // visible to writers in feed
             attachments,
             createdAt: FieldValue.serverTimestamp()
         });

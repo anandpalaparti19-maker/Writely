@@ -292,7 +292,25 @@
                 jobs.forEach(job => {
                     const card = document.createElement('div');
                     card.className = 'job-card';
-                    const cityDisplay = job.city ? job.city.charAt(0).toUpperCase() + job.city.slice(1) : '';
+                    const cityDisplay = job.cityDisplay || (job.city ? job.city.charAt(0).toUpperCase() + job.city.slice(1) : '');
+
+                    // Deadline rendering — Firestore Timestamps come over the wire as { _seconds, _nanoseconds }
+                    let deadlineLabel = '';
+                    let deadlineColor = 'var(--text-secondary)';
+                    if (job.deadline) {
+                        const ms = job.deadline._seconds ? job.deadline._seconds * 1000 : new Date(job.deadline).getTime();
+                        if (Number.isFinite(ms)) {
+                            const hoursLeft = (ms - Date.now()) / 36e5;
+                            const dt = new Date(ms);
+                            const dStr = dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+                            const tStr = dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+                            deadlineLabel = `⏱ ${dStr}, ${tStr}`;
+                            if (hoursLeft < 0) { deadlineLabel = '⏱ Overdue'; deadlineColor = '#EF4444'; }
+                            else if (hoursLeft < 24) deadlineColor = '#EF4444';
+                            else if (hoursLeft < 72) deadlineColor = '#D97706';
+                        }
+                    }
+
                     card.innerHTML = `
                         <div class="job-header">
                             <div>
@@ -300,11 +318,16 @@
                                 <div class="job-meta">
                                     <span>${job.deliveryMethod || 'Digital'}</span>
                                     <span>•</span>
-                                    <span>Pincode ${escapeHtml(job.pincode || '—')}</span>
+                                    <span>${escapeHtml(cityDisplay || 'City —')}, ${escapeHtml(job.pincode || '—')}</span>
                                 </div>
                             </div>
                             <div class="job-price">₹${job.budget}</div>
                         </div>
+                        ${(job.collegeName || deadlineLabel) ? `
+                            <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
+                                ${job.collegeName ? `<span style="background:#EEF2FF; color:#4338CA; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600;">🎓 ${escapeHtml(job.collegeName)}</span>` : ''}
+                                ${deadlineLabel ? `<span style="background:#F1F5F9; color:${deadlineColor}; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600;">${deadlineLabel}</span>` : ''}
+                            </div>` : ''}
                         <p style="color:var(--text-secondary); font-size:15px; margin-bottom:24px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">
                             ${escapeHtml(job.description || 'No description provided.')}
                         </p>

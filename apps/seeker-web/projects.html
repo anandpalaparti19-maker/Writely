@@ -285,6 +285,18 @@
                     return timeB - timeA;
                 });
 
+                // Fetch writer profiles for all assigned writers in parallel
+                const writerIds = [...new Set(assignments.filter(j => j.activeWriterId).map(j => j.activeWriterId))];
+                const writerProfiles = {};
+                if (writerIds.length > 0) {
+                    await Promise.all(writerIds.map(async (writerId) => {
+                        const doc = await firebase.firestore().collection('users').doc(writerId).get();
+                        if (doc.exists) {
+                            writerProfiles[writerId] = doc.data();
+                        }
+                    }));
+                }
+
                 assignments.forEach(job => {
                     const docId = job.id;
                     
@@ -310,13 +322,23 @@
                         actionHtml = `<button onclick="leaveReview('${docId}')" class="btn btn-primary" style="font-size:12px; padding:6px 12px;">⭐ Leave Review</button>`;
                     }
 
+                    // Display writer details if assigned
+                    let writerHtml = '-';
+                    if (job.activeWriterId && writerProfiles[job.activeWriterId]) {
+                        const writer = writerProfiles[job.activeWriterId];
+                        writerHtml = `
+                            <div style="font-weight: 600;">${writer.displayName || writer.fullName || 'Writer'}</div>
+                            <div style="font-size: 11px; color: var(--text-tertiary);">${writer.collegeName || writer.university || '—'}</div>
+                        `;
+                    }
+
                     list.innerHTML += `
                         <tr>
                             <td>
                                 <div style="font-weight: 600;">${job.title}</div>
                                 <div style="font-size: 12px; color: var(--text-tertiary);">Posted ${dateStr}</div>
                             </td>
-                            <td>${job.activeWriterId ? 'Assigned' : '-'}</td>
+                            <td>${writerHtml}</td>
                             <td style="font-weight: 600;">₹${(job.budget || 0).toLocaleString()}</td>
                             <td><span class="status-badge ${badgeClass}">${displayStatus}</span></td>
                             <td>${actionHtml}</td>
@@ -337,38 +359,53 @@
             bidsList.innerHTML = '<p style="text-align:center;">Loading bids...</p>';
             
             try {
-                const bidsSnapshot = await firebase.firestore().collection('bids')
-                    .where('assignmentId', '==', assignmentId)
-                    .get();
+                // Bids are stored as an embedded array inside the assignment doc
+                const asnDoc = await firebase.firestore().collection('assignments').doc(assignmentId).get();
+                if (!asnDoc.exists) {
+                    bidsList.innerHTML = '<p style="text-align:center; color:var(--text-tertiary);">Assignment not found.</p>';
+                    return;
+                }
+                const asn = asnDoc.data();
+                const bidsArr = asn.bids || [];
                 
-                if (bidsSnapshot.empty) {
-                    bidsList.innerHTML = '<p style="text-align:center; color:var(--text-tertiary);">No bids yet for this assignment.</p>';
+                if (bidsArr.length === 0) {
+                    bidsList.innerHTML = '<p style="text-align:center; color:var(--text-tertiary); padding:20px;">No bids yet for this assignment. Writers will bid soon! 🕐</p>';
                     return;
                 }
 
-                const bidCards = [];
-                for (const doc of bidsSnapshot.docs) {
-                    const bid = doc.data();
-                    const writerProfile = await firebase.firestore().collection('users').doc(bid.writerId).get();
-                    const writer = writerProfile.data() || {};
-                    
-                    bidCards.push(`
+                // Fetch all writer profiles in parallel
+                const writerIds = [...new Set(bidsArr.map(b => b.writerId).filter(Boolean))];
+                const writerMap = {};
+                await Promise.all(writerIds.map(async wid => {
+                    const wDoc = await firebase.firestore().collection('users').doc(wid).get();
+                    if (wDoc.exists) writerMap[wid] = wDoc.data();
+                }));
+
+                const bidCards = bidsArr.map(bid => {
+                    const writer = writerMap[bid.writerId] || {};
+                    const name = writer.displayName || writer.fullName || 'Anonymous Writer';
+                    const college = writer.collegeName || writer.university || 'University not specified';
+                    const phone = writer.phoneNumber || null;
+                    const proposal = bid.proposal || bid.coverLetter || 'No cover letter provided.';
+
+                    return `
                         <div style="padding:20px; border:1px solid var(--border); border-radius:16px; margin-bottom:16px;">
                             <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:12px;">
                                 <div>
-                                    <h4 style="font-size:16px; font-weight:700;">${writer.displayName || writer.fullName || 'Anonymous Writer'}</h4>
-                                    <p style="font-size:12px; color:var(--ink-purple); font-weight:600;">${writer.collegeName || writer.university || 'University not specified'}</p>
+                                    <h4 style="font-size:16px; font-weight:700;">${name}</h4>
+                                    <p style="font-size:12px; color:var(--ink-purple); font-weight:600;">🎓 ${college}</p>
+                                    ${phone ? `<p style="font-size:12px; color:var(--text-secondary); margin-top:2px;">📞 ${phone}</p>` : ''}
                                 </div>
                                 <div style="text-align:right;">
                                     <div style="font-size:18px; font-weight:800; color:var(--flow-teal);">₹${bid.amount || '0'}</div>
-                                    <div style="font-size:10px; color:var(--text-tertiary);">Requested Amount</div>
+                                    <div style="font-size:10px; color:var(--text-tertiary);">Bid Amount</div>
                                 </div>
                             </div>
-                            <p style="font-size:13px; color:var(--text-secondary); line-height:1.6; margin-bottom:16px; background:var(--bg-secondary); padding:12px; border-radius:8px;">"${bid.coverLetter || 'No cover letter provided.'}"</p>
-                            <button onclick="hireWriter('${assignmentId}', '${bid.writerId}')" class="btn btn-primary" style="width:100%;">Hire & Pay Escrow</button>
+                            <p style="font-size:13px; color:var(--text-secondary); line-height:1.6; margin-bottom:16px; background:var(--bg-secondary); padding:12px; border-radius:8px;">&quot;${proposal}&quot;</p>
+                            <button onclick="hireWriter('${assignmentId}', '${bid.writerId}')" class="btn btn-primary" style="width:100%;">✅ Hire This Writer</button>
                         </div>
-                    `);
-                }
+                    `;
+                });
                 bidsList.innerHTML = bidCards.join('');
             } catch (err) {
                 console.error(err);
@@ -478,10 +515,37 @@
                         </div>
                     `;
                 } else if (job.status === 'ACTIVE') {
+                    // Fetch the writer's profile to display their details
+                    let writerInfoHtml = '';
+                    if (job.activeWriterId) {
+                        try {
+                            const wDoc = await firebase.firestore().collection('users').doc(job.activeWriterId).get();
+                            if (wDoc.exists) {
+                                const w = wDoc.data();
+                                const wName = w.displayName || w.fullName || 'Your Writer';
+                                const wCollege = w.collegeName || w.university || '';
+                                const wPhone = w.phoneNumber || '';
+                                writerInfoHtml = `
+                                    <div style="display:flex; align-items:center; gap:14px; padding:16px; background:white; border-radius:12px; border:1px solid var(--border); margin-bottom:12px; text-align:left;">
+                                        <div style="width:44px; height:44px; border-radius:50%; background:var(--ink-tint); display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0;">✍️</div>
+                                        <div>
+                                            <div style="font-weight:700; font-size:15px; color:var(--text-primary);">${wName}</div>
+                                            ${wCollege ? `<div style="font-size:12px; color:var(--ink-purple); font-weight:600; margin-top:2px;">🎓 ${wCollege}</div>` : ''}
+                                            ${wPhone ? `<div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">📞 ${wPhone}</div>` : ''}
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                        } catch (_) { /* non-fatal */ }
+                    }
                     detailsHtml += `
-                        <div style="margin-top:20px; padding:16px; background:var(--ink-tint); border-radius:12px; text-align:center;">
-                            <p style="font-size:13px; color:var(--ink-purple); font-weight:600;">Writer is currently working on your project.</p>
-                            <a href="messages.html" style="font-size:12px; color:var(--ink-purple); text-decoration:underline;">Chat with writer</a>
+                        <div style="margin-top:20px;">
+                            <p style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary); margin-bottom:10px;">Your Assigned Writer</p>
+                            ${writerInfoHtml || '<p style="font-size:13px; color:var(--text-tertiary);">Writer details loading...</p>'}
+                            <div style="padding:14px; background:var(--ink-tint); border-radius:12px; text-align:center;">
+                                <p style="font-size:13px; color:var(--ink-purple); font-weight:600; margin-bottom:8px;">Writer is working on your project. 🚀</p>
+                                <a href="messages.html" style="font-size:13px; color:var(--ink-purple); font-weight:700; text-decoration:none; background:white; padding:8px 16px; border-radius:8px; display:inline-block; border:1px solid var(--ink-purple);">💬 Chat with Writer</a>
+                            </div>
                         </div>
                     `;
                 }

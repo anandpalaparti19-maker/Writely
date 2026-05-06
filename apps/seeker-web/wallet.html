@@ -9,8 +9,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-analytics-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
     <script src="../../shared/utils/logic.js" defer></script>
+    <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
     <style>
         body { background-color: var(--bg-secondary); }
         .dashboard-layout {
@@ -191,9 +193,11 @@
 
         async function loadTransactions(userId) {
             try {
+                // Transactions where this user is the receiver (payouts, top-ups, withdrawals)
                 const snapshot = await firebase.firestore().collection('transactions')
-                    .where('seekerId', '==', userId)
+                    .where('receiverId', '==', userId)
                     .orderBy('timestamp', 'desc')
+                    .limit(50)
                     .get();
 
                 const list = document.getElementById('transactionList');
@@ -206,17 +210,23 @@
                 snapshot.forEach(doc => {
                     const t = doc.data();
                     const dateStr = t.timestamp ? t.timestamp.toDate().toLocaleDateString() : 'Just now';
-                    const isPos = t.amount > 0 && t.type === 'DEPOSIT'; // example
+                    // Positive = money in (top-up, payout). Negative = money out (withdrawal).
+                    const isPos = t.amount > 0;
                     const colorClass = isPos ? 'amount-pos' : 'amount-neg';
                     const sign = isPos ? '+' : '-';
-                    
+                    const niceType = ({
+                        WALLET_TOPUP: 'Top-Up',
+                        PAYOUT: 'Job Payout',
+                        WITHDRAWAL: 'Withdrawal'
+                    })[t.type] || t.type;
+
                     list.innerHTML += `
                         <tr>
                             <td>
-                                <div style="font-weight: 600;">${t.type}</div>
+                                <div style="font-weight: 600;">${niceType}</div>
                                 <div style="font-size: 12px; color: var(--text-tertiary);">${doc.id}</div>
                             </td>
-                            <td>${t.type}</td>
+                            <td>${niceType}</td>
                             <td>${dateStr}</td>
                             <td><span class="${colorClass}">${sign}₹${Math.abs(t.amount).toLocaleString()}</span></td>
                             <td><span style="font-weight: 600;">${t.status || 'Completed'}</span></td>
@@ -226,8 +236,26 @@
             } catch (err) { console.error("Transactions error:", err); }
         }
 
-        function addFunds() {
-            alert('Cashfree Payment Gateway integration pending.\n\nIn production, this will open a secure Cashfree Checkout modal to add INR to your wallet.');
+        async function addFunds() {
+            const raw = prompt('How much would you like to add to your wallet?\n\nMin ₹100, Max ₹50,000', '500');
+            if (raw === null) return; // cancelled
+            const amount = Number(raw);
+            if (!Number.isFinite(amount) || amount < 100 || amount > 50000) {
+                alert('Please enter a valid amount between ₹100 and ₹50,000.');
+                return;
+            }
+            try {
+                const added = await Writely.topUpWallet(amount);
+                alert(`✅ ₹${added.toLocaleString()} added to your wallet!`);
+                const user = firebase.auth().currentUser;
+                if (user) {
+                    loadWallet(user.uid);
+                    loadTransactions(user.uid);
+                }
+            } catch (err) {
+                console.error('Top-up failed:', err);
+                alert('Payment failed: ' + (err.message || 'Unknown error'));
+            }
         }
 
         function logout() {

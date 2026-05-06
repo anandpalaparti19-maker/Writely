@@ -80,7 +80,11 @@ app.use(cors({
     credentials: true
 }));
 
-app.use(express.json({ limit: '1mb' }));
+// Capture rawBody on every JSON request — required for verifying Cashfree webhook signatures
+app.use(express.json({
+    limit: '1mb',
+    verify: (req, _res, buf) => { req.rawBody = buf.toString('utf8'); }
+}));
 
 // --- Rate limiters ---
 const generalLimiter = rateLimit({
@@ -124,6 +128,16 @@ app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISO
 console.log('✅ Writely API Gateway (Firebase Admin) Starting...');
 
 // --- CASHFREE PAYMENTS ---
+
+// Plan catalog — server-controlled to prevent clients from inventing plan types or fees.
+// fixedAmount: charge is fixed regardless of client input.
+// minAmount/maxAmount: client specifies amount within range (used for wallet top-ups).
+const PLAN_CATALOG = {
+    SEEKER_PASS:     { fixedAmount: 120, kind: 'subscription', label: 'Seeker Pass (11 days)' },
+    WRITER_ZERO_FEE: { fixedAmount: 30,  kind: 'subscription', label: 'Writer Zero-Fee Pass (24h)' },
+    WALLET_TOPUP:    { minAmount: 100, maxAmount: 50000, kind: 'wallet', label: 'Wallet Top-Up' }
+};
+
 // Public config endpoint — frontend needs the App ID + environment to init Cashfree.js
 app.get('/api/payments/cashfree/config', (req, res) => {
     res.json({
@@ -132,13 +146,23 @@ app.get('/api/payments/cashfree/config', (req, res) => {
     });
 });
 
-// Create a Cashfree order — returns payment_session_id used by Cashfree.js drop-in
+// Create a Cashfree order — returns payment_session_id used by Cashfree.js drop-in.
+// Stores intent in `paymentOrders` collection so /verify and /webhook can apply it idempotently.
 app.post('/api/payments/cashfree/create-order', paymentLimiter, requireAuth, async (req, res) => {
     try {
-        const { amount, currency = 'INR' } = req.body;
-        const numAmount = Number(amount);
-        if (!Number.isFinite(numAmount) || numAmount <= 0 || numAmount > 100000) {
-            return res.status(400).json({ error: 'Invalid amount (must be 1–100000)' });
+        const { planType, amount: clientAmount, currency = 'INR' } = req.body;
+        const plan = PLAN_CATALOG[planType];
+        if (!plan) return res.status(400).json({ error: 'Invalid planType' });
+
+        // Resolve final amount server-side (never trust the client for fixed plans)
+        let finalAmount;
+        if (plan.fixedAmount) {
+            finalAmount = plan.fixedAmount;
+        } else {
+            finalAmount = Number(clientAmount);
+            if (!Number.isFinite(finalAmount) || finalAmount < plan.minAmount || finalAmount > plan.maxAmount) {
+                return res.status(400).json({ error: `Amount must be ₹${plan.minAmount}–${plan.maxAmount}` });
+            }
         }
 
         // Cashfree requires customer phone. Pull from user's Firestore profile, fall back to a test number.
@@ -148,9 +172,8 @@ app.post('/api/payments/cashfree/create-order', paymentLimiter, requireAuth, asy
             const userSnap = await db.collection('users').doc(req.user.uid).get();
             if (userSnap.exists) {
                 const u = userSnap.data();
-                if (u.phoneNumber && /^\d{10}$/.test(String(u.phoneNumber).replace(/\D/g, '').slice(-10))) {
-                    customerPhone = String(u.phoneNumber).replace(/\D/g, '').slice(-10);
-                }
+                const digits = String(u.phoneNumber || '').replace(/\D/g, '').slice(-10);
+                if (/^\d{10}$/.test(digits)) customerPhone = digits;
                 if (u.email) customerEmail = u.email;
             }
         } catch (_) { /* non-fatal */ }
@@ -158,21 +181,28 @@ app.post('/api/payments/cashfree/create-order', paymentLimiter, requireAuth, asy
         const orderId = `wr_${req.user.uid.substring(0, 8)}_${Date.now()}`;
         const payload = {
             order_id: orderId,
-            order_amount: Math.round(numAmount * 100) / 100,
+            order_amount: Math.round(finalAmount * 100) / 100,
             order_currency: currency,
             customer_details: {
                 customer_id: req.user.uid,
                 customer_email: customerEmail,
                 customer_phone: customerPhone
             },
-            order_meta: {
-                // Cashfree will POST here after payment; we still verify server-side on /verify
-                notify_url: ''
-            }
+            order_meta: { notify_url: '' }
         };
 
         const { data } = await cashfreeClient.post('/orders', payload);
-        // Return only what the frontend needs
+
+        // Persist intent for idempotent application by /verify or /webhook later
+        await db.collection('paymentOrders').doc(orderId).set({
+            uid: req.user.uid,
+            amount: finalAmount,
+            planType,
+            kind: plan.kind,
+            status: 'PENDING',
+            createdAt: FieldValue.serverTimestamp()
+        });
+
         res.json({
             order_id: data.order_id,
             payment_session_id: data.payment_session_id,
@@ -186,52 +216,175 @@ app.post('/api/payments/cashfree/create-order', paymentLimiter, requireAuth, asy
     }
 });
 
-// Verify payment by querying Cashfree directly — never trust the client.
-// Frontend just sends { order_id, planType }; we call Cashfree to confirm PAID status.
+/**
+ * Idempotently apply a paid Cashfree order to the user's account.
+ * - Looks up our `paymentOrders` record (created at /create-order)
+ * - Verifies status with Cashfree (server→server)
+ * - Atomically claims the order (status=PROCESSED) and applies side effects
+ *   (subscription extension OR wallet credit) inside a single Firestore transaction.
+ *
+ * Safe to call multiple times for the same order_id (e.g., /verify + webhook race).
+ * Used by both /verify (user-initiated) and /webhook (Cashfree-initiated).
+ */
+async function applyPaidOrder(orderId, expectedUid = null) {
+    const orderRef = db.collection('paymentOrders').doc(orderId);
+    const existing = await orderRef.get();
+
+    if (!existing.exists) throw new Error('Unknown order');
+    const intent = existing.data();
+    if (expectedUid && intent.uid !== expectedUid) {
+        const e = new Error('Order does not belong to caller');
+        e.code = 'FORBIDDEN';
+        throw e;
+    }
+    // Fast path — already processed
+    if (intent.status === 'PROCESSED') {
+        return { alreadyProcessed: true, kind: intent.kind, expiresAt: intent.expiresAt?.toDate?.() || null, amount: intent.amount };
+    }
+
+    // Verify with Cashfree (cannot do HTTP inside a Firestore transaction)
+    const { data: cfOrder } = await cashfreeClient.get(`/orders/${encodeURIComponent(orderId)}`);
+    if (!cfOrder || cfOrder.order_status !== 'PAID') {
+        const e = new Error(`Payment not completed (status: ${cfOrder?.order_status || 'unknown'})`);
+        e.code = 'NOT_PAID';
+        throw e;
+    }
+
+    // Atomic claim + apply side effects
+    return await db.runTransaction(async (t) => {
+        const fresh = await t.get(orderRef);
+        const data = fresh.data();
+        if (data.status === 'PROCESSED') {
+            return { alreadyProcessed: true, kind: data.kind, expiresAt: data.expiresAt?.toDate?.() || null, amount: data.amount };
+        }
+
+        const { uid, amount, planType, kind } = data;
+
+        if (kind === 'wallet') {
+            // Credit wallet
+            const walletRef = db.collection('wallets').doc(uid);
+            t.set(walletRef, { userId: uid, balance: FieldValue.increment(amount) }, { merge: true });
+
+            t.set(db.collection('transactions').doc(), {
+                receiverId: uid,
+                amount,
+                type: 'WALLET_TOPUP',
+                status: 'COMPLETED',
+                paymentId: orderId,
+                timestamp: FieldValue.serverTimestamp()
+            });
+
+            t.update(orderRef, {
+                status: 'PROCESSED',
+                processedAt: FieldValue.serverTimestamp(),
+                cfReference: cfOrder.cf_order_id || null
+            });
+
+            return { kind: 'wallet', amountAdded: amount };
+        }
+
+        // Subscription plans
+        const endDate = new Date();
+        let subscriptionField = 'subscription';
+        let subType = 'SEEKER_PASS';
+        if (planType === 'WRITER_ZERO_FEE') {
+            endDate.setHours(endDate.getHours() + 24);
+            subscriptionField = 'writerSubscription';
+            subType = 'WRITER_ZERO_FEE';
+        } else {
+            endDate.setDate(endDate.getDate() + 11);
+        }
+
+        t.update(db.collection('users').doc(uid), {
+            [subscriptionField]: {
+                type: subType,
+                expiresAt: admin.firestore.Timestamp.fromDate(endDate),
+                paymentId: orderId
+            }
+        });
+
+        t.update(orderRef, {
+            status: 'PROCESSED',
+            processedAt: FieldValue.serverTimestamp(),
+            expiresAt: admin.firestore.Timestamp.fromDate(endDate),
+            cfReference: cfOrder.cf_order_id || null
+        });
+
+        return { kind: 'subscription', expiresAt: endDate };
+    });
+}
+
+// User-initiated verify — called by frontend after the Cashfree modal closes successfully.
 app.post('/api/payments/cashfree/verify', paymentLimiter, requireAuth, async (req, res) => {
     try {
-        const { order_id, planType } = req.body;
+        const { order_id } = req.body;
         if (!order_id || typeof order_id !== 'string') {
             return res.status(400).json({ error: 'Missing order_id' });
         }
-        // order_id format check — must match what we issued (prevents arbitrary lookups)
+        // Order ID format check — defence in depth (also enforced by paymentOrders ownership check)
         if (!order_id.startsWith(`wr_${req.user.uid.substring(0, 8)}_`)) {
             return res.status(403).json({ error: 'Order does not belong to caller' });
         }
 
-        const { data: order } = await cashfreeClient.get(`/orders/${encodeURIComponent(order_id)}`);
-        if (!order || order.order_status !== 'PAID') {
-            return res.status(400).json({ error: `Payment not completed (status: ${order?.order_status || 'unknown'})` });
-        }
-
-        // userId comes from the verified Firebase token — NOT from the request body (prevents spoofing)
-        const userId = req.user.uid;
-        const endDate = new Date();
-        let subscriptionField = 'subscription';
-        let subType = 'SEEKER_PASS';
-
-        if (planType === 'WRITER_ZERO_FEE') {
-            endDate.setHours(endDate.getHours() + 24); // 24 hours
-            subscriptionField = 'writerSubscription';
-            subType = 'WRITER_ZERO_FEE';
-        } else {
-            endDate.setDate(endDate.getDate() + 11);  // 11 days for seeker pass
-        }
-
-        await db.collection('users').doc(userId).update({
-            [subscriptionField]: {
-                type: subType,
-                expiresAt: admin.firestore.Timestamp.fromDate(endDate),
-                paymentId: order_id,
-                cfReference: order.cf_order_id || null
-            }
-        });
-
-        res.json({ status: 'success', message: 'Payment verified', expiresAt: endDate });
+        const result = await applyPaidOrder(order_id, req.user.uid);
+        res.json({ status: 'success', message: 'Payment verified', ...result });
     } catch (err) {
         const detail = err.response?.data || err.message;
         console.error('Cashfree verify error:', detail);
-        res.status(500).json({ error: 'Verification failed' });
+        const code = err.code === 'FORBIDDEN' ? 403 : err.code === 'NOT_PAID' ? 400 : 500;
+        res.status(code).json({ error: err.message || 'Verification failed' });
+    }
+});
+
+/**
+ * Cashfree webhook — server-to-server confirmation.
+ * Critical safety net: even if the user closes the browser before /verify fires,
+ * Cashfree will POST here and we'll still apply the order.
+ *
+ * Signature verification: HMAC-SHA256(timestamp + rawBody) base64-encoded, must match `x-webhook-signature`.
+ * The shared secret is the Cashfree Secret Key (same one used for API auth).
+ */
+app.post('/api/payments/cashfree/webhook', async (req, res) => {
+    try {
+        const signature = req.headers['x-webhook-signature'];
+        const timestamp = req.headers['x-webhook-timestamp'];
+        if (!signature || !timestamp || !req.rawBody) {
+            return res.status(400).send('Missing signature/timestamp/body');
+        }
+
+        const expected = crypto.createHmac('sha256', CASHFREE_SECRET)
+            .update(timestamp + req.rawBody)
+            .digest('base64');
+
+        // Timing-safe comparison
+        const sigBuf = Buffer.from(signature);
+        const expBuf = Buffer.from(expected);
+        if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+            console.warn('Cashfree webhook: signature mismatch');
+            return res.status(401).send('Invalid signature');
+        }
+
+        const event = req.body;
+        const eventType = event?.type || '';
+        const orderId = event?.data?.order?.order_id;
+
+        // Always 200 to Cashfree quickly so they don't retry forever; just log non-success types.
+        if (eventType === 'PAYMENT_SUCCESS_WEBHOOK' && orderId) {
+            try {
+                await applyPaidOrder(orderId);
+                console.log(`✅ Webhook applied order ${orderId}`);
+            } catch (e) {
+                console.error(`❌ Webhook apply failed for ${orderId}:`, e.message);
+            }
+        } else {
+            console.log(`ℹ️  Webhook event ignored: ${eventType} (order=${orderId || 'n/a'})`);
+        }
+
+        res.status(200).send('ok');
+    } catch (err) {
+        console.error('Webhook handler error:', err.message);
+        // Even on internal error we 200 so Cashfree stops retrying for parsing issues
+        res.status(200).send('ok');
     }
 });
 
@@ -280,64 +433,74 @@ app.post('/api/assignments/:id/escrow', requireAuth, async (req, res) => {
 });
 
 // --- RELEASE FUNDS (only the SEEKER who owns the assignment can release) ---
+// Wrapped in a Firestore transaction to prevent double-payouts on concurrent calls.
 app.post('/api/assignments/:id/release', requireAuth, async (req, res) => {
     try {
-        const assignmentRef = db.collection('assignments').doc(req.params.id);
-        const assignmentSnap = await assignmentRef.get();
-        if (!assignmentSnap.exists) return res.status(404).json({ error: 'Assignment not found' });
-        const assignment = assignmentSnap.data();
+        const result = await db.runTransaction(async (t) => {
+            const assignmentRef = db.collection('assignments').doc(req.params.id);
+            const assignmentSnap = await t.get(assignmentRef);
+            if (!assignmentSnap.exists) {
+                const e = new Error('Assignment not found'); e.code = 'NOT_FOUND'; throw e;
+            }
+            const assignment = assignmentSnap.data();
 
-        // Ownership check
-        if (assignment.seekerId !== req.user.uid) {
-            return res.status(403).json({ error: 'Only the seeker can release funds' });
-        }
-        if (assignment.status === 'COMPLETED') {
-            return res.status(400).json({ error: 'Already released' });
-        }
-        if (!assignment.activeWriterId) {
-            return res.status(400).json({ error: 'No writer assigned' });
-        }
+            // Ownership + state guards (re-checked INSIDE transaction → race-safe)
+            if (assignment.seekerId !== req.user.uid) {
+                const e = new Error('Only the seeker can release funds'); e.code = 'FORBIDDEN'; throw e;
+            }
+            if (assignment.status === 'COMPLETED') {
+                const e = new Error('Already released'); e.code = 'CONFLICT'; throw e;
+            }
+            if (!assignment.activeWriterId) {
+                const e = new Error('No writer assigned'); e.code = 'BAD_REQUEST'; throw e;
+            }
 
-        let writerDeduction = 15; // Standard
+            // Compute writer deduction (2% if writer has zero-fee pass, else flat ₹15)
+            let writerDeduction = 15;
+            const writerRef = db.collection('users').doc(assignment.activeWriterId);
+            const writerSnap = await t.get(writerRef);
+            const writerData = writerSnap.data();
+            if (writerData?.writerSubscription?.expiresAt?.toDate() > new Date()) {
+                writerDeduction = Math.round(assignment.budget * 0.02);
+            }
+            const writerPayout = assignment.budget - writerDeduction;
 
-        // Check for Writer Zero-Fee Pass (now 2% Residual)
-        const writerRef = db.collection('users').doc(assignment.activeWriterId);
-        const writerSnap = await writerRef.get();
-        const writerData = writerSnap.data();
+            // Credit wallet (creates if not exists via merge:true)
+            const walletRef = db.collection('wallets').doc(assignment.activeWriterId);
+            t.set(walletRef, {
+                userId: assignment.activeWriterId,
+                balance: FieldValue.increment(writerPayout)
+            }, { merge: true });
 
-        if (writerData?.writerSubscription?.expiresAt?.toDate() > new Date()) {
-            writerDeduction = Math.round(assignment.budget * 0.02); // 2% Residual
-        }
+            // Audit transaction
+            t.set(db.collection('transactions').doc(), {
+                assignmentId: req.params.id,
+                receiverId: assignment.activeWriterId,
+                amount: writerPayout,
+                type: 'PAYOUT',
+                status: 'COMPLETED',
+                timestamp: FieldValue.serverTimestamp()
+            });
 
-        const writerPayout = assignment.budget - writerDeduction;
+            // Mark assignment completed
+            t.update(assignmentRef, {
+                status: 'COMPLETED',
+                writerPayout,
+                platformEarnings: (assignment.platformFeePaid || 0) + writerDeduction,
+                completedAt: FieldValue.serverTimestamp()
+            });
 
-        const walletRef = db.collection('wallets').doc(assignment.activeWriterId);
-        const walletSnap = await walletRef.get();
-
-        if (walletSnap.exists) {
-            await walletRef.update({ balance: FieldValue.increment(writerPayout) });
-        } else {
-            await walletRef.set({ userId: assignment.activeWriterId, balance: writerPayout });
-        }
-
-        await db.collection('transactions').add({
-            assignmentId: req.params.id,
-            receiverId: assignment.activeWriterId,
-            amount: writerPayout,
-            type: 'PAYOUT',
-            status: 'COMPLETED',
-            timestamp: FieldValue.serverTimestamp()
+            return { writerPayout, writerDeduction };
         });
 
-        await assignmentRef.update({ 
-            status: 'COMPLETED',
-            writerPayout,
-            platformEarnings: (assignment.platformFeePaid || 0) + writerDeduction
-        });
-
-        res.json({ message: 'Funds released successfully', writerPayout, writerDeduction });
+        res.json({ message: 'Funds released successfully', ...result });
     } catch (err) {
-        res.status(400).json({ error: err.message });
+        const code = err.code === 'NOT_FOUND' ? 404
+                    : err.code === 'FORBIDDEN' ? 403
+                    : err.code === 'CONFLICT' ? 409
+                    : 400;
+        console.error('Release error:', err.message);
+        res.status(code).json({ error: err.message });
     }
 });
 

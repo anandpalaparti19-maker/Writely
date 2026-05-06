@@ -270,8 +270,10 @@ Writely.createAssignment = async function(formData) {
 };
 
 // --- CASHFREE PAYMENT HELPERS ---
-// Internal: opens the Cashfree.js drop-in checkout for a given order, then verifies on the server.
-Writely._cashfreePay = async function({ amount, planType, description }) {
+// Internal: opens the Cashfree.js drop-in checkout for a given plan, then verifies on the server.
+// `planType` is the source of truth — backend looks up the price (or validates the range for top-ups).
+// For WALLET_TOPUP, pass `amount` (₹100–₹50,000); for fixed plans, `amount` is ignored.
+Writely._cashfreePay = async function({ planType, amount }) {
     const user = firebase.auth().currentUser;
     if (!user) throw new Error("Please login first");
 
@@ -284,10 +286,10 @@ Writely._cashfreePay = async function({ amount, planType, description }) {
     if (!configRes.ok) throw new Error("Could not load payment config");
     const { mode } = await configRes.json();
 
-    // 2. Create order on backend
+    // 2. Create order on backend (server resolves the actual amount from planType)
     const orderRes = await this.apiFetch('/payments/cashfree/create-order', {
         method: 'POST',
-        body: JSON.stringify({ amount })
+        body: JSON.stringify({ planType, amount })
     });
     const order = await orderRes.json();
     if (!orderRes.ok || !order.payment_session_id) {
@@ -305,31 +307,37 @@ Writely._cashfreePay = async function({ amount, planType, description }) {
         throw new Error(result.error.message || "Payment cancelled or failed");
     }
 
-    // 4. Server-side verify by querying Cashfree directly
+    // 4. Server-side verify by querying Cashfree directly.
+    //    NOTE: Even if this fails (e.g., user closes browser), the Cashfree webhook
+    //    will still apply the order server-side — payment is never lost.
     const verifyRes = await this.apiFetch('/payments/cashfree/verify', {
         method: 'POST',
-        body: JSON.stringify({ order_id: order.order_id, planType })
+        body: JSON.stringify({ order_id: order.order_id })
     });
     const verifyData = await verifyRes.json();
     if (!verifyRes.ok) throw new Error(verifyData.error || "Payment verification failed");
 
-    return new Date(verifyData.expiresAt);
+    return verifyData; // { kind, expiresAt? , amountAdded? , alreadyProcessed? }
 };
 
 Writely.buySubscription = async function() {
-    return this._cashfreePay({
-        amount: 120,
-        planType: 'SEEKER_PASS',
-        description: 'Seeker One-Day Delivery Pass'
-    });
+    const data = await this._cashfreePay({ planType: 'SEEKER_PASS' });
+    return data.expiresAt ? new Date(data.expiresAt) : null;
 };
 
 Writely.buyWriterSubscription = async function() {
-    return this._cashfreePay({
-        amount: 30,
-        planType: 'WRITER_ZERO_FEE',
-        description: 'Writer Zero-Fee Pass (24 Hours)'
-    });
+    const data = await this._cashfreePay({ planType: 'WRITER_ZERO_FEE' });
+    return data.expiresAt ? new Date(data.expiresAt) : null;
+};
+
+// Top up the seeker's wallet with INR via Cashfree. Range: ₹100 – ₹50,000.
+Writely.topUpWallet = async function(amount) {
+    const numAmount = Number(amount);
+    if (!Number.isFinite(numAmount) || numAmount < 100 || numAmount > 50000) {
+        throw new Error("Amount must be between ₹100 and ₹50,000");
+    }
+    const data = await this._cashfreePay({ planType: 'WALLET_TOPUP', amount: numAmount });
+    return data.amountAdded || numAmount;
 };
 
 Writely.logout = async function() {

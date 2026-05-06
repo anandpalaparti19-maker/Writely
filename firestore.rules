@@ -12,7 +12,19 @@ service cloud.firestore {
       // Users can only read their own profile or public profiles (if needed)
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && request.auth.uid == userId;
+      // Users CANNOT modify their own subscription/wallet status — backend only
+      allow update: if request.auth != null && request.auth.uid == userId
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['subscription', 'writerSubscription', 'role', 'metrics']);
+
+      // --- NOTIFICATIONS (subcollection) ---
+      // Each user has their own notifications. Only owner can read.
+      // Only the `read` flag can be flipped client-side; everything else is backend-only.
+      match /notifications/{notificationId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow update: if request.auth != null && request.auth.uid == userId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
+        allow create, delete: if false; // backend only
+      }
     }
 
     // --- ASSIGNMENTS ---
@@ -64,12 +76,28 @@ service cloud.firestore {
     // --- TRANSACTIONS & WALLETS ---
     // Strictly backend only for financial safety
     match /transactions/{transactionId} {
-      allow read: if request.auth != null && (resource.data.userId == request.auth.uid);
-      allow write: if false; 
+      // Users can read transactions where they are the receiver (matches our backend writes)
+      allow read: if request.auth != null && resource.data.receiverId == request.auth.uid;
+      allow write: if false;
     }
 
     match /wallets/{userId} {
       allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+    }
+
+    // --- PAYMENT ORDERS (Cashfree intent records) ---
+    // Backend writes only. Users can read their own order history if needed.
+    match /paymentOrders/{orderId} {
+      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
+    // --- REVIEWS (post-completion ratings) ---
+    // Anyone authenticated can read reviews (used to display writer profiles).
+    // Reviews are written by the backend after assignment completion to ensure validity.
+    match /reviews/{reviewId} {
+      allow read: if request.auth != null;
       allow write: if false;
     }
   }

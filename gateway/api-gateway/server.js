@@ -125,6 +125,35 @@ async function requireAuth(req, res, next) {
 // Health check (public, no auth) — used by Render and uptime monitors
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
+/**
+ * Push a notification to a user's notifications subcollection.
+ * Always non-blocking (errors logged, never thrown to caller) — notifications
+ * must never break the underlying business operation that triggered them.
+ *
+ *   type:    short machine-readable code (e.g., 'BID_RECEIVED')
+ *   title:   short human-readable title shown in dropdown
+ *   body:    longer detail line
+ *   link:    optional URL the bell-dropdown row should link to
+ *   meta:    extra structured data (assignmentId, etc.)
+ */
+async function createNotification(uid, { type, title, body, link = null, meta = {} } = {}) {
+    if (!uid || !type) return;
+    try {
+        await db.collection('users').doc(uid)
+            .collection('notifications').add({
+                type,
+                title: title || '',
+                body: body || '',
+                link,
+                meta,
+                read: false,
+                createdAt: FieldValue.serverTimestamp()
+            });
+    } catch (e) {
+        console.warn(`Notification dispatch failed for ${uid}:`, e.message);
+    }
+}
+
 console.log('✅ Writely API Gateway (Firebase Admin) Starting...');
 
 // --- CASHFREE PAYMENTS ---
@@ -490,10 +519,19 @@ app.post('/api/assignments/:id/release', requireAuth, async (req, res) => {
                 completedAt: FieldValue.serverTimestamp()
             });
 
-            return { writerPayout, writerDeduction };
+            return { writerPayout, writerDeduction, writerId: assignment.activeWriterId, title: assignment.title };
         });
 
-        res.json({ message: 'Funds released successfully', ...result });
+        // Notify the writer that funds were released to their wallet
+        createNotification(result.writerId, {
+            type: 'PAYOUT_RECEIVED',
+            title: '💰 Payment released!',
+            body: `₹${result.writerPayout.toLocaleString()} has been credited to your wallet for "${result.title || 'your work'}"`,
+            link: `/apps/writer-mobile/writer.html#wallet`,
+            meta: { assignmentId: req.params.id, amount: result.writerPayout }
+        });
+
+        res.json({ message: 'Funds released successfully', writerPayout: result.writerPayout, writerDeduction: result.writerDeduction });
     } catch (err) {
         const code = err.code === 'NOT_FOUND' ? 404
                     : err.code === 'FORBIDDEN' ? 403
@@ -607,6 +645,16 @@ app.post('/api/assignments/:id/bid', requireAuth, async (req, res) => {
             bids: FieldValue.arrayUnion({ writerId, amount: numAmount, proposal: proposal.trim(), timestamp: new Date() }),
             status: 'BIDDING'
         });
+
+        // Notify the seeker (fire-and-forget)
+        createNotification(asn.seekerId, {
+            type: 'BID_RECEIVED',
+            title: 'New bid on your assignment',
+            body: `A writer placed a ₹${numAmount.toLocaleString()} bid on "${asn.title || 'your assignment'}"`,
+            link: `/apps/seeker-web/dashboard.html#assignment/${req.params.id}`,
+            meta: { assignmentId: req.params.id, amount: numAmount }
+        });
+
         res.json({ message: 'Bid submitted successfully' });
     } catch (err) {
         console.error('Bid error:', err.message);
@@ -669,6 +717,15 @@ app.post('/api/assignments/:id/assign', requireAuth, async (req, res) => {
                 text: "I have started working on your project!",
                 timestamp: FieldValue.serverTimestamp()
             });
+        });
+
+        // Notify the hired writer (fire-and-forget)
+        createNotification(req.body.writerId, {
+            type: 'BID_ACCEPTED',
+            title: '🎉 You won a bid!',
+            body: 'A seeker accepted your bid. Funds are locked in escrow — start working!',
+            link: `/apps/writer-mobile/writer.html#assignment/${req.params.id}`,
+            meta: { assignmentId: req.params.id }
         });
 
         res.json({ message: 'Writer hired and funds locked in escrow!' });
@@ -758,6 +815,16 @@ app.post('/api/assignments/:id/submit', requireAuth, upload.single('solution'), 
             solution: solutionData,
             status: 'REVIEW'
         });
+
+        // Notify seeker that work was delivered
+        createNotification(asn.seekerId, {
+            type: 'SOLUTION_SUBMITTED',
+            title: '📦 Your assignment is ready!',
+            body: `"${asn.title || 'Your assignment'}" has been delivered. Review and release payment.`,
+            link: `/apps/seeker-web/dashboard.html#assignment/${req.params.id}`,
+            meta: { assignmentId: req.params.id }
+        });
+
         res.json({ message: 'Solution submitted. Your seeker has been notified.' });
     } catch (err) {
         res.status(400).json({ error: err.message });
@@ -823,6 +890,18 @@ app.post('/api/assignments/:id/dispute', requireAuth, async (req, res) => {
             status: 'WARNING',
             time: 'Just now'
         });
+
+        // Notify the OTHER party about the dispute
+        const otherUid = assignment.seekerId === req.user.uid ? assignment.activeWriterId : assignment.seekerId;
+        if (otherUid) {
+            createNotification(otherUid, {
+                type: 'DISPUTE_OPENED',
+                title: '⚠️ A dispute was opened on your project',
+                body: `Reason: ${reason.substring(0, 120)}${reason.length > 120 ? '…' : ''}`,
+                link: `/apps/seeker-web/dashboard.html#assignment/${req.params.id}`,
+                meta: { assignmentId: req.params.id }
+            });
+        }
 
         res.json({ message: 'Project frozen. Arbitration initiated.' });
     } catch (err) {

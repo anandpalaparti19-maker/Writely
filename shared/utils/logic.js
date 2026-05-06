@@ -351,6 +351,252 @@ Writely.logout = async function() {
     }
 };
 
+// =====================================================================
+// NOTIFICATIONS — auto-injected bell + real-time listener
+// Works on any page that loads logic.js. No HTML changes needed.
+// =====================================================================
+Writely.notifications = (function() {
+    let unsubscribe = null;
+    let cached = [];
+    let bellEl = null;
+    let badgeEl = null;
+    let panelEl = null;
+    let injected = false;
+
+    // Don't show notifications on auth/index pages — only after login
+    function shouldShowOnThisPage() {
+        const p = window.location.pathname.toLowerCase();
+        if (p.endsWith('/') || p.endsWith('/index.html') || p === '') return false;
+        return true;
+    }
+
+    function injectStyles() {
+        if (document.getElementById('writely-notif-styles')) return;
+        const style = document.createElement('style');
+        style.id = 'writely-notif-styles';
+        style.textContent = `
+            .wr-notif-bell {
+                position: fixed; top: 18px; right: 18px; z-index: 9998;
+                width: 44px; height: 44px; border-radius: 50%;
+                background: white; border: 1px solid var(--border, #e5e7eb);
+                display: flex; align-items: center; justify-content: center;
+                cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.06);
+                transition: transform .15s ease, box-shadow .15s ease;
+            }
+            .wr-notif-bell:hover { transform: scale(1.05); box-shadow: 0 6px 16px rgba(0,0,0,.1); }
+            .wr-notif-bell svg { width: 20px; height: 20px; color: #1f2937; }
+            .wr-notif-badge {
+                position: absolute; top: -4px; right: -4px;
+                background: #ef4444; color: white;
+                min-width: 18px; height: 18px; padding: 0 5px;
+                border-radius: 9px; font-size: 10px; font-weight: 700;
+                display: none; align-items: center; justify-content: center;
+                box-shadow: 0 0 0 2px white;
+            }
+            .wr-notif-badge.show { display: flex; }
+            .wr-notif-panel {
+                position: fixed; top: 70px; right: 18px; z-index: 9999;
+                width: min(360px, calc(100vw - 36px));
+                max-height: 70vh; overflow-y: auto;
+                background: white; border-radius: 16px;
+                border: 1px solid var(--border, #e5e7eb);
+                box-shadow: 0 12px 40px rgba(0,0,0,.15);
+                display: none;
+            }
+            .wr-notif-panel.open { display: block; }
+            .wr-notif-header {
+                padding: 16px 20px; border-bottom: 1px solid var(--border, #f3f4f6);
+                display: flex; justify-content: space-between; align-items: center;
+                position: sticky; top: 0; background: white; border-radius: 16px 16px 0 0;
+            }
+            .wr-notif-header h4 { margin: 0; font-size: 15px; font-weight: 700; }
+            .wr-notif-mark-read {
+                background: none; border: none; color: #6366f1;
+                font-size: 12px; cursor: pointer; font-weight: 600;
+            }
+            .wr-notif-list { list-style: none; margin: 0; padding: 0; }
+            .wr-notif-item {
+                padding: 14px 20px; border-bottom: 1px solid #f3f4f6;
+                cursor: pointer; transition: background .15s ease;
+                display: block; color: inherit; text-decoration: none;
+            }
+            .wr-notif-item:hover { background: #f9fafb; }
+            .wr-notif-item.unread { background: #eef2ff; }
+            .wr-notif-item.unread:hover { background: #e0e7ff; }
+            .wr-notif-title { font-weight: 600; font-size: 13px; color: #111827; margin-bottom: 4px; }
+            .wr-notif-body { font-size: 12px; color: #6b7280; line-height: 1.4; }
+            .wr-notif-time { font-size: 11px; color: #9ca3af; margin-top: 6px; }
+            .wr-notif-empty {
+                padding: 40px 20px; text-align: center; color: #9ca3af; font-size: 13px;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function injectUI() {
+        if (injected) return;
+        injectStyles();
+
+        // Bell
+        bellEl = document.createElement('button');
+        bellEl.className = 'wr-notif-bell';
+        bellEl.setAttribute('aria-label', 'Notifications');
+        bellEl.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+            <span class="wr-notif-badge" id="wr-notif-badge">0</span>
+        `;
+        document.body.appendChild(bellEl);
+        badgeEl = bellEl.querySelector('.wr-notif-badge');
+
+        // Panel
+        panelEl = document.createElement('div');
+        panelEl.className = 'wr-notif-panel';
+        panelEl.innerHTML = `
+            <div class="wr-notif-header">
+                <h4>Notifications</h4>
+                <button class="wr-notif-mark-read" type="button">Mark all read</button>
+            </div>
+            <ul class="wr-notif-list"><li class="wr-notif-empty">No notifications yet.</li></ul>
+        `;
+        document.body.appendChild(panelEl);
+
+        // Toggle on bell click
+        bellEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            panelEl.classList.toggle('open');
+        });
+        // Close on outside click
+        document.addEventListener('click', (e) => {
+            if (panelEl.classList.contains('open') && !panelEl.contains(e.target) && !bellEl.contains(e.target)) {
+                panelEl.classList.remove('open');
+            }
+        });
+        // Mark all read
+        panelEl.querySelector('.wr-notif-mark-read').addEventListener('click', markAllRead);
+
+        injected = true;
+    }
+
+    function timeAgo(date) {
+        if (!date) return '';
+        const s = Math.floor((Date.now() - date.getTime()) / 1000);
+        if (s < 60) return 'just now';
+        if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+        if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+        return `${Math.floor(s / 86400)}d ago`;
+    }
+
+    function escapeHtml(str) {
+        return String(str || '').replace(/[&<>"']/g, c =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function render() {
+        if (!panelEl) return;
+        const list = panelEl.querySelector('.wr-notif-list');
+        const unreadCount = cached.filter(n => !n.read).length;
+
+        // Update badge
+        if (badgeEl) {
+            badgeEl.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+            badgeEl.classList.toggle('show', unreadCount > 0);
+        }
+
+        if (cached.length === 0) {
+            list.innerHTML = '<li class="wr-notif-empty">No notifications yet.</li>';
+            return;
+        }
+
+        list.innerHTML = cached.map(n => {
+            const created = n.createdAt?.toDate ? n.createdAt.toDate() : null;
+            return `
+                <a class="wr-notif-item ${n.read ? '' : 'unread'}" data-id="${n.id}" href="${n.link || '#'}">
+                    <div class="wr-notif-title">${escapeHtml(n.title)}</div>
+                    <div class="wr-notif-body">${escapeHtml(n.body)}</div>
+                    <div class="wr-notif-time">${timeAgo(created)}</div>
+                </a>
+            `;
+        }).join('');
+
+        // Mark single as read on click
+        list.querySelectorAll('.wr-notif-item').forEach(el => {
+            el.addEventListener('click', async () => {
+                const id = el.dataset.id;
+                const user = firebase.auth().currentUser;
+                if (!id || !user) return;
+                try {
+                    await firebase.firestore()
+                        .collection('users').doc(user.uid)
+                        .collection('notifications').doc(id)
+                        .update({ read: true, readAt: firebase.firestore.FieldValue.serverTimestamp() });
+                } catch (e) { /* ignore */ }
+            });
+        });
+    }
+
+    async function markAllRead() {
+        const user = firebase.auth().currentUser;
+        if (!user) return;
+        const unread = cached.filter(n => !n.read);
+        if (unread.length === 0) return;
+
+        const batch = firebase.firestore().batch();
+        unread.forEach(n => {
+            const ref = firebase.firestore()
+                .collection('users').doc(user.uid)
+                .collection('notifications').doc(n.id);
+            batch.update(ref, { read: true, readAt: firebase.firestore.FieldValue.serverTimestamp() });
+        });
+        try { await batch.commit(); } catch (e) { console.warn('markAllRead failed:', e.message); }
+    }
+
+    function start(uid) {
+        if (unsubscribe) unsubscribe();
+        injectUI();
+        unsubscribe = firebase.firestore()
+            .collection('users').doc(uid)
+            .collection('notifications')
+            .orderBy('createdAt', 'desc')
+            .limit(20)
+            .onSnapshot(snap => {
+                cached = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                render();
+            }, err => {
+                console.warn('Notifications listener error:', err.message);
+            });
+    }
+
+    function stop() {
+        if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+        cached = [];
+        if (bellEl) bellEl.remove();
+        if (panelEl) panelEl.remove();
+        bellEl = panelEl = badgeEl = null;
+        injected = false;
+    }
+
+    // Auto-bootstrap once Firebase auth resolves
+    function autoBootstrap() {
+        if (typeof firebase === 'undefined' || !firebase.auth) return;
+        if (!shouldShowOnThisPage()) return;
+        firebase.auth().onAuthStateChanged(user => {
+            if (user) start(user.uid);
+            else stop();
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', autoBootstrap);
+    } else {
+        autoBootstrap();
+    }
+
+    return { start, stop, markAllRead };
+})();
+
 // --- AI SUPPORT BOT LOGIC ---
 const chatHistory = [];
 

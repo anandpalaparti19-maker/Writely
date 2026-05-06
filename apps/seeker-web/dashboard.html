@@ -209,6 +209,9 @@
                         </div>
 
                         <!-- LOCATION (always required — drives nearby-writer matching) -->
+                        <button type="button" id="detectPostLocBtn" style="margin-bottom:12px; padding:10px 16px; border-radius:10px; border:1px dashed var(--ink-purple); background:var(--ink-tint); color:var(--ink-purple); font-weight:600; font-size:13px; cursor:pointer; width:100%;">
+                            📍 Detect my location automatically
+                        </button>
                         <div style="display:grid; grid-template-columns:1.4fr 1fr; gap:12px; margin-bottom:20px;">
                             <div>
                                 <label style="display:block; font-size:12px; font-weight:700; color:var(--text-tertiary); margin-bottom:8px; text-transform:uppercase;">City</label>
@@ -309,6 +312,7 @@
     </div>
 
     <script>
+        let _detectBtnAttached = false;
         async function openModal() { 
             document.getElementById('postJobModal').style.display = 'flex'; 
             calculateBudget();
@@ -322,6 +326,16 @@
                     if (pinEl  && !pinEl.value  && profile.pincode) pinEl.value = profile.pincode;
                 }
             } catch (_) { /* non-critical — user can still type */ }
+
+            // Attach the detect-location button once (idempotent)
+            if (!_detectBtnAttached && window.Writely?.attachLocationDetectButton) {
+                Writely.attachLocationDetectButton(document.getElementById('detectPostLocBtn'), {
+                    city:    document.getElementById('postCity'),
+                    pincode: document.getElementById('postPincode'),
+                    address: document.getElementById('deliveryAddress')
+                });
+                _detectBtnAttached = true;
+            }
         }
         function closeModal() { document.getElementById('postJobModal').style.display = 'none'; }
 

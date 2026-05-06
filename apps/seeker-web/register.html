@@ -87,6 +87,9 @@
                 <label>Phone Number</label>
                 <input type="tel" id="phoneNumber" placeholder="e.g. +91 9876543210" required>
             </div>
+            <button type="button" id="detectLocBtn" style="margin-bottom:16px; padding:10px 16px; border-radius:10px; border:1px dashed var(--ink-purple); background:var(--ink-tint); color:var(--ink-purple); font-weight:600; font-size:13px; cursor:pointer; width:100%;">
+                📍 Detect my location automatically
+            </button>
             <div style="display:grid; grid-template-columns:1.4fr 1fr; gap:12px;">
                 <div class="input-group">
                     <label>City</label>
@@ -126,6 +129,22 @@
             document.querySelectorAll('.role-option').forEach(opt => opt.classList.remove('active'));
             el.classList.add('active');
         }
+
+        // Wire up the location-detect button once the page is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            // Wait for logic.js (defer) to run, then attach
+            const tryAttach = () => {
+                if (window.Writely?.attachLocationDetectButton) {
+                    Writely.attachLocationDetectButton(document.getElementById('detectLocBtn'), {
+                        city: document.getElementById('city'),
+                        pincode: document.getElementById('pincode')
+                    });
+                } else {
+                    setTimeout(tryAttach, 100);
+                }
+            };
+            tryAttach();
+        });
     </script>
 </body>
 </html>

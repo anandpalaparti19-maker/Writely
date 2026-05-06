@@ -101,6 +101,105 @@ const Writely = {
     }
 };
 
+// =====================================================================
+// 📍 LOCATION DETECTION — browser geolocation + free reverse-geocoding
+// Uses OpenStreetMap Nominatim (free, no API key required, ~1 req/sec is fine).
+// Swap for Google Geocoding API later if you need higher accuracy / volume.
+// =====================================================================
+
+/**
+ * Get the user's current location (lat/lng + city + pincode).
+ * Resolves with: { lat, lng, accuracy, city, pincode, formattedAddress }
+ * Rejects if permission denied, timeout, or geolocation unsupported.
+ */
+Writely.detectLocation = async function() {
+    if (!navigator.geolocation) {
+        throw new Error('Your browser does not support location detection.');
+    }
+
+    // 1. Ask the browser for coordinates (uses GPS / Wi-Fi / cell towers)
+    const coords = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+            pos => resolve({
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                accuracy: pos.coords.accuracy
+            }),
+            err => reject(err),
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        );
+    });
+
+    // 2. Reverse-geocode via OpenStreetMap Nominatim (free, no key)
+    let geo = null;
+    try {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}&zoom=18&addressdetails=1`;
+        const res = await fetch(url, { headers: { 'Accept-Language': 'en-IN' } });
+        if (res.ok) geo = await res.json();
+    } catch (e) {
+        console.warn('Reverse geocoding failed (non-fatal):', e.message);
+    }
+
+    const addr = geo?.address || {};
+    // Nominatim returns the locality at different keys depending on size
+    const city = addr.city || addr.town || addr.village
+              || addr.suburb || addr.state_district || addr.county || '';
+    const pincode = (addr.postcode || '').replace(/\D/g, '').slice(0, 6);
+
+    return {
+        lat: coords.lat,
+        lng: coords.lng,
+        accuracy: coords.accuracy,
+        city,
+        pincode,
+        formattedAddress: geo?.display_name || ''
+    };
+};
+
+/**
+ * Wire a "📍 Detect" button to auto-fill city / pincode / address inputs.
+ * Falls back gracefully if the user denies permission.
+ *
+ *   Writely.attachLocationDetectButton(buttonEl, {
+ *       city:    document.getElementById('city'),
+ *       pincode: document.getElementById('pincode'),
+ *       address: document.getElementById('deliveryAddress')  // optional
+ *   });
+ */
+Writely.attachLocationDetectButton = function(buttonEl, fields = {}) {
+    if (!buttonEl) return;
+    const original = buttonEl.innerHTML;
+
+    buttonEl.addEventListener('click', async (e) => {
+        e.preventDefault();
+        buttonEl.disabled = true;
+        buttonEl.innerHTML = '⏳ Detecting…';
+
+        try {
+            const loc = await Writely.detectLocation();
+            if (fields.city    && loc.city)             fields.city.value = loc.city;
+            if (fields.pincode && loc.pincode)          fields.pincode.value = loc.pincode;
+            if (fields.address && loc.formattedAddress) fields.address.value = loc.formattedAddress;
+
+            // Trigger change events so any listeners (validation, budget calc, etc.) react
+            [fields.city, fields.pincode, fields.address].forEach(el => {
+                if (el) el.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+
+            buttonEl.innerHTML = '✓ Detected';
+            setTimeout(() => { buttonEl.innerHTML = original; buttonEl.disabled = false; }, 1800);
+        } catch (err) {
+            buttonEl.innerHTML = original;
+            buttonEl.disabled = false;
+            const msg = err.code === 1 ? '📍 Location permission denied. Please type your city and pincode below.'
+                      : err.code === 2 ? '📍 Could not determine your location. Please type manually.'
+                      : err.code === 3 ? '📍 Location request timed out. Please type manually.'
+                      : `Could not detect location: ${err.message || err}. Please type manually.`;
+            alert(msg);
+        }
+    });
+};
+
 // --- AUTHENTICATION & REGISTRATION ---
 window.registerUser = async function(event) {
     if (event) event.preventDefault();

@@ -306,6 +306,8 @@
                     let actionHtml = `<button onclick="trackProject('${docId}')" class="btn btn-secondary" style="font-size:12px; padding:6px 12px;">Track Status</button>`;
                     if(job.status === 'POSTED') {
                         actionHtml = `<button onclick="viewBids('${docId}')" class="btn btn-secondary" style="font-size:12px; padding:6px 12px;">View Bids</button>`;
+                    } else if (job.status === 'COMPLETED') {
+                        actionHtml = `<button onclick="leaveReview('${docId}')" class="btn btn-primary" style="font-size:12px; padding:6px 12px;">⭐ Leave Review</button>`;
                     }
 
                     list.innerHTML += `
@@ -384,6 +386,20 @@
             } catch (err) {
                 console.error(err);
                 alert("Failed to hire writer. Please check your balance.");
+            }
+        }
+
+        // Open the global review modal (defined in shared/utils/logic.js).
+        async function leaveReview(assignmentId) {
+            try {
+                const result = await Writely.reviews.prompt(assignmentId, { title: 'Rate your writer' });
+                if (result) {
+                    alert('Thanks for your review! 🙏');
+                    location.reload();
+                }
+            } catch (err) {
+                console.error('Review error:', err);
+                alert('Could not submit review: ' + (err.message || err));
             }
         }
 

@@ -1109,11 +1109,41 @@ window.Writely = Writely;
         document.head.appendChild(apple);
     }
 
+    // Inject a "Pricing" link into the sidebar nav of every dashboard page.
+    // Auto-resolves the correct relative path from any /apps/<role>/ folder.
+    function injectPricingLink() {
+        const menu = document.querySelector('aside.sidebar nav.sidebar-menu, .sidebar-menu');
+        if (!menu || menu.querySelector('a[data-wr-pricing]')) return; // already injected
+
+        // Compute relative URL — pricing.html lives under /apps/seeker-web/
+        const path = window.location.pathname.toLowerCase();
+        let href = 'pricing.html';
+        if (path.includes('/apps/writer-mobile/'))     href = '../seeker-web/pricing.html';
+        else if (path.includes('/apps/admin-web/'))    href = '../seeker-web/pricing.html';
+        else if (path.includes('/apps/tenant-admin-web/')) href = '../seeker-web/pricing.html';
+
+        const link = document.createElement('a');
+        link.href = href;
+        link.className = 'menu-item';
+        link.setAttribute('data-wr-pricing', '1');
+        link.innerHTML = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="1" x2="12" y2="23"></line>
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
+            Pricing
+        `;
+        // Highlight when on the pricing page itself
+        if (path.endsWith('/pricing.html')) link.classList.add('active');
+        menu.appendChild(link);
+    }
+
     function setup() {
         setFavicon();
         replaceLogoMarks();
         setupTopNav();
         setupDashboardSidebar();
+        injectPricingLink();
     }
 
     if (document.readyState === 'loading') {

@@ -137,6 +137,10 @@
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                     My Submissions
                 </a>
+                <a href="messages.html" class="menu-item">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                    Messages
+                </a>
                 <a href="earnings.html" class="menu-item">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
                     Earnings
@@ -309,11 +313,7 @@
                             
                             let attachmentsHtml = '';
                             if (job.attachments && job.attachments.length > 0) {
-                                attachmentsHtml = `<div style="margin: 12px 0; display:flex; gap:8px; flex-wrap:wrap;">`;
-                                job.attachments.forEach(att => {
-                                    attachmentsHtml += `<a href="${att.url}" target="_blank" style="font-size:12px; background:var(--bg-secondary); padding:4px 8px; border-radius:6px; color:var(--ink-purple); text-decoration:none;">📎 ${att.filename}</a>`;
-                                });
-                                attachmentsHtml += `</div>`;
+                                attachmentsHtml = `<div style="margin: 12px 0; font-size:12px; color:var(--text-secondary);">📎 ${job.attachments.length} attachment(s) included. Available after accepting.</div>`;
                             }
 
                             return `
@@ -409,7 +409,22 @@
                 if (activeJobs.length > 0) {
                     activeSection.style.display = 'block';
                     noActive.style.display = 'none';
-                    activeList.innerHTML = activeJobs.map(job => `
+                    activeList.innerHTML = activeJobs.map(job => {
+                        let attachmentsHtml = '';
+                        if (job.attachments && job.attachments.length > 0) {
+                            const items = job.attachments.map((att, idx) => `
+                                <button type="button"
+                                        class="download-attachment"
+                                        onclick="downloadWriterAttachment(this, '${job.id}', ${idx})"
+                                        style="display:inline-flex; align-items:center; gap:6px; background:var(--ink-tint); color:var(--ink-purple); border:1px solid var(--ink-purple); padding:6px 12px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; margin-right:8px;"
+                                        title="Download ${att.filename || 'attachment'}">
+                                    📎 ${(att.filename || 'file').length > 24 ? (att.filename || 'file').slice(0, 22) + '…' : (att.filename || 'file')}
+                                </button>
+                            `).join('');
+                            attachmentsHtml = `<div style="margin-top:12px;">${items}</div>`;
+                        }
+
+                        return `
                         <div class="job-card" style="border-left: 4px solid var(--ink-purple); margin-bottom:16px;">
                             <div style="display:flex; justify-content:space-between; align-items:center;">
                                 <div>
@@ -417,11 +432,16 @@
                                     <div style="font-size: 12px; color: var(--text-secondary); margin-top:4px;">
                                         ${job.deliveryMethod === 'Physical' ? '📦 Physical Delivery • Address: ' + (job.deliveryAddress || 'Ask seeker') : '📄 Digital PDF Required'}
                                     </div>
+                                    ${attachmentsHtml}
                                 </div>
-                                <button onclick="openSubmitModal('${job.id}', '${job.deliveryMethod}')" class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;">Deliver Work</button>
+                                <div style="display:flex; gap:8px; flex-direction:column; align-items:stretch;">
+                                    <a href="messages.html#${job.id}" class="btn btn-secondary" style="padding: 8px 16px; font-size: 13px; text-align:center;">Chat</a>
+                                    <button onclick="openSubmitModal('${job.id}', '${job.deliveryMethod}')" class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;">Deliver</button>
+                                </div>
                             </div>
                         </div>
-                    `).join('');
+                        `;
+                    }).join('');
                 } else {
                     activeSection.style.display = 'none';
                     noActive.style.display = 'block';
@@ -431,6 +451,20 @@
                 document.getElementById('statRating').innerText = "5.0"; 
 
             } catch (err) { console.error(err); }
+        }
+
+        async function downloadWriterAttachment(btn, assignmentId, index) {
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Preparing…';
+            try {
+                await Writely.downloadAttachment(assignmentId, index);
+            } catch (err) {
+                alert('Could not download: ' + (err.message || err));
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
         }
 
         async function handleBuyWriterPass() {

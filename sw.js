@@ -6,7 +6,7 @@
  *  - API requests (POST or */api/*): never cached, always network. If offline, return JSON 503.
  *  - Firebase, Cashfree, third-party CDNs: bypass entirely.
  */
-const VERSION = 'writely-v1';
+const VERSION = 'writely-v2';
 const STATIC_CACHE = `${VERSION}-static`;
 const PAGE_CACHE = `${VERSION}-pages`;
 

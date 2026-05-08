@@ -30,16 +30,55 @@ try {
 
 const Writely = {
     events: [],
-    API_URL: (
-        window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' || 
-        window.location.hostname.startsWith('192.168.') || 
-        window.location.hostname.startsWith('10.') || 
-        window.location.hostname.startsWith('172.') ||
-        window.location.hostname === ''
-    ) 
-        ? `http://${window.location.hostname || 'localhost'}:5001/api` 
-        : 'https://writely-55q5.onrender.com/api',
+    API_URL: (function() {
+        const h = window.location.hostname;
+        if (h === 'localhost' || h === '127.0.0.1' || h.startsWith('192.168.') || h.startsWith('10.') || h.startsWith('172.') || h === '') {
+            return `http://${h || 'localhost'}:5001/api`;
+        }
+        return 'https://writely-55q5.onrender.com/api';
+    })(),
+
+window.Writely = Writely; // Expose globally immediately
+
+    init: async function() {
+        console.log("🌐 Writely API Context:", this.API_URL);
+        
+        // Connectivity check
+        try {
+            const res = await fetch(`${this.API_URL}/health`).catch(() => null);
+            if (res && res.ok) console.log("✅ API Connectivity: OK");
+            else console.warn("⚠️ API Connectivity: FAILED (Check if backend is running)");
+        } catch (e) {}
+
+        this.checkPaymentReturn();
+    },
+
+    checkPaymentReturn: async function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const orderId = urlParams.get('order_id');
+        if (orderId && !window.paymentProcessed) {
+            window.paymentProcessed = true;
+            console.log("💳 Detected return from payment. Verifying order:", orderId);
+            try {
+                const res = await this.apiFetch('/payments/cashfree/verify', {
+                    method: 'POST',
+                    body: JSON.stringify({ order_id: orderId })
+                });
+                
+                if (res.status === 'PAID' || res.status === 'SUCCESS' || res.status === 'SUCCESS_D') {
+                    console.log("✅ Payment Verified Successfully!");
+                    alert(`✅ Payment Successful! ₹${res.amount || ''} added to your wallet.`);
+                    // Redirect to wallet to clear params and refresh balance
+                    window.location.href = window.location.pathname;
+                } else {
+                    console.warn("❌ Payment verification failed/pending:", res.status);
+                    // If it's a known failure status, clear the flag to allow retry or showing error
+                }
+            } catch (err) {
+                console.error("❌ Verification error:", err);
+            }
+        }
+    },
 
     /**
      * Authenticated fetch helper — attaches the current user's Firebase ID token
@@ -448,27 +487,38 @@ Writely._cashfreePay = async function({ planType, amount }) {
     // 2. Create order on backend (server resolves the actual amount from planType)
     const orderRes = await this.apiFetch('/payments/cashfree/create-order', {
         method: 'POST',
-        body: JSON.stringify({ planType, amount })
+        body: JSON.stringify({ 
+            planType, 
+            amount,
+            returnUrl: window.location.href // Pass returnUrl to backend too
+        })
     });
     const order = await orderRes.json();
     if (!orderRes.ok || !order.payment_session_id) {
         throw new Error(order.error || "Failed to initialize payment");
     }
 
-    // 3. Open Cashfree drop-in checkout (modal)
+    // 3. Open Cashfree drop-in checkout
+    // SDK v3 documentation: https://docs.cashfree.com/docs/js-checkout
     const cashfree = Cashfree({ mode: mode || 'sandbox' });
+    
+    console.log("💳 Opening Cashfree Checkout for:", order.order_id);
+    
     const result = await cashfree.checkout({
         paymentSessionId: order.payment_session_id,
-        redirectTarget: '_modal'
+        returnUrl: window.location.href // Redirect back to this page after payment
     });
 
+    // NOTE: For redirect-based payments (Banks, some UPI apps), the code below 
+    // will NOT run as the page redirects. Verification must happen on page load
+    // or via the Cashfree webhook.
     if (result?.error) {
+        console.error("❌ Cashfree Error:", result.error);
         throw new Error(result.error.message || "Payment cancelled or failed");
     }
 
     // 4. Server-side verify by querying Cashfree directly.
-    //    NOTE: Even if this fails (e.g., user closes browser), the Cashfree webhook
-    //    will still apply the order server-side — payment is never lost.
+    console.log("🔍 Verifying payment for:", order.order_id);
     const verifyRes = await this.apiFetch('/payments/cashfree/verify', {
         method: 'POST',
         body: JSON.stringify({ order_id: order.order_id })
@@ -476,7 +526,8 @@ Writely._cashfreePay = async function({ planType, amount }) {
     const verifyData = await verifyRes.json();
     if (!verifyRes.ok) throw new Error(verifyData.error || "Payment verification failed");
 
-    return verifyData; // { kind, expiresAt? , amountAdded? , alreadyProcessed? }
+    console.log("✅ Payment Verified:", verifyData);
+    return verifyData;
 };
 
 // Generic plan purchase helper — works for any subscription plan.
@@ -973,9 +1024,13 @@ Writely.notifications = (function() {
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', autoBootstrap);
+        document.addEventListener('DOMContentLoaded', () => {
+            autoBootstrap();
+            Writely.init();
+        });
     } else {
         autoBootstrap();
+        Writely.init();
     }
 
     return { start, stop, markAllRead };

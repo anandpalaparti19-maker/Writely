@@ -35,7 +35,7 @@ if (process.env.SENTRY_DSN) {
 console.log('🔑 Using Google GenAI Key:', process.env.GOOGLE_GENAI_API_KEY ? `${process.env.GOOGLE_GENAI_API_KEY.substring(0, 8)}...` : 'MISSING');
 const ai = genkit({
     plugins: [googleAI({ apiKey: process.env.GOOGLE_GENAI_API_KEY })],
-    model: googleAI.model('gemini-3-flash-preview'),
+    model: googleAI.model('gemini-1.5-flash'),
 });
 
 
@@ -83,23 +83,36 @@ const app = express();
 
 // --- CORS: restrict to trusted origins ---
 const allowedOriginPatterns = [
-    /^https:\/\/([a-z0-9-]+\.)?netlify\.app$/i,        // any netlify subdomain (deploy previews too)
-    /^https:\/\/([a-z0-9-]+\.)?onrender\.com$/i,
-    /^https:\/\/([a-z0-9-]+\.)?web\.app$/i,            // Firebase Hosting (writely-304a8.web.app)
+    /^https:\/\/writely-304a8\.web\.app$/i,            // Explicit primary domain
+    /^https:\/\/([a-z0-9-]+\.)?web\.app$/i,            // Any Firebase Hosting subdomain
     /^https:\/\/([a-z0-9-]+\.)?firebaseapp\.com$/i,    // Firebase Hosting alt domain
+    /^https:\/\/([a-z0-9-]+\.)?netlify\.app$/i,        // Netlify subdomains
+    /^https:\/\/([a-z0-9-]+\.)?onrender\.com$/i,       // Backend itself (if needed)
     /^http:\/\/localhost(:\d+)?$/i,
     /^http:\/\/127\.0\.0\.1(:\d+)?$/i,
     /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/i
 ];
+
 app.use(cors({
     origin: (origin, cb) => {
-        // Allow same-origin / curl / Postman (no Origin header)
+        // 1. Allow same-origin / curl / Postman (no Origin header)
         if (!origin) return cb(null, true);
-        if (allowedOriginPatterns.some(rx => rx.test(origin))) return cb(null, true);
-        console.warn('CORS blocked origin:', origin);
-        cb(new Error('Origin not allowed'));
+
+        // 2. Normalize and check against patterns
+        const normalized = String(origin).trim().toLowerCase();
+        const isAllowed = allowedOriginPatterns.some(rx => rx.test(normalized));
+
+        if (isAllowed) {
+            cb(null, true);
+        } else {
+            console.warn('⚠️ CORS blocked origin:', origin);
+            // Return false instead of an Error to avoid triggering the global 500 handler
+            // Browsers will still block the request but the server won't crash/error.
+            cb(null, false);
+        }
     },
-    credentials: true
+    credentials: true,
+    optionsSuccessStatus: 200 // Some legacy browsers choke on 204
 }));
 
 // Capture rawBody on every JSON request — required for verifying Cashfree webhook signatures
@@ -327,7 +340,10 @@ app.post('/api/payments/cashfree/create-order', paymentLimiter, requireAuth, asy
                 customer_email: customerEmail,
                 customer_phone: customerPhone
             },
-            order_meta: { notify_url: '' }
+            order_meta: { 
+                notify_url: '',
+                return_url: req.body.returnUrl || '' // Allow frontend to specify return URL
+            }
         };
 
         const { data } = await cashfreeClient.post('/orders', payload);
@@ -1138,6 +1154,103 @@ app.post('/api/assignments/:id/dispute', requireAuth, async (req, res) => {
     }
 });
 
+// --- NEGOTIATE DISPUTE (Propose a settlement split) ---
+app.post('/api/assignments/:id/negotiate', requireAuth, async (req, res) => {
+    try {
+        const { writerShare, note } = req.body;
+        const share = Number(writerShare);
+        if (isNaN(share) || share < 0 || share > 1) {
+            return res.status(400).json({ error: 'writerShare must be between 0 and 1' });
+        }
+
+        const assignmentRef = db.collection('assignments').doc(req.params.id);
+        const snap = await assignmentRef.get();
+        if (!snap.exists) return res.status(404).json({ error: 'Assignment not found' });
+        const asn = snap.data();
+
+        if (asn.status !== 'DISPUTED') {
+            return res.status(400).json({ error: 'Negotiation is only possible during an active dispute' });
+        }
+
+        if (asn.seekerId !== req.user.uid && asn.activeWriterId !== req.user.uid) {
+            return res.status(403).json({ error: 'Only involved parties can negotiate' });
+        }
+
+        const proposal = {
+            proposerId: req.user.uid,
+            writerShare: share,
+            note: note || '',
+            timestamp: FieldValue.serverTimestamp()
+        };
+
+        await assignmentRef.update({
+            disputeProposal: proposal
+        });
+
+        const isSeeker = req.user.uid === asn.seekerId;
+        const targetId = isSeeker ? asn.activeWriterId : asn.seekerId;
+        createNotification(targetId, {
+            type: 'DISPUTE_PROPOSAL',
+            title: '🤝 Settlement proposed',
+            body: `${isSeeker ? 'Seeker' : 'Writer'} has proposed a ${Math.round(share * 100)}% split.`,
+            link: isSeeker ? `/apps/writer-mobile/submissions.html` : `/apps/seeker-web/dashboard.html`,
+            meta: { assignmentId: req.params.id, writerShare: share }
+        });
+
+        res.json({ message: 'Settlement proposed' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- ACCEPT NEGOTIATION (Finalize the settlement) ---
+app.post('/api/assignments/:id/accept-negotiation', requireAuth, async (req, res) => {
+    try {
+        const assignmentRef = db.collection('assignments').doc(req.params.id);
+        const result = await db.runTransaction(async (t) => {
+            const snap = await t.get(assignmentRef);
+            if (!snap.exists) throw new Error('Not found');
+            const asn = snap.data();
+
+            if (!asn.disputeProposal || asn.disputeProposal.proposerId === req.user.uid) {
+                throw new Error('No proposal to accept from the other party');
+            }
+
+            const share = asn.disputeProposal.writerShare;
+            const budget = Number(asn.budget || 0);
+            const writerPayout = Math.round(budget * share);
+            const seekerRefund = budget - writerPayout;
+
+            // Apply payouts
+            if (writerPayout > 0 && asn.activeWriterId) {
+                const writerWallet = db.collection('wallets').doc(asn.activeWriterId);
+                t.set(writerWallet, { userId: asn.activeWriterId, balance: FieldValue.increment(writerPayout) }, { merge: true });
+            }
+            if (seekerRefund > 0) {
+                const seekerWallet = db.collection('wallets').doc(asn.seekerId);
+                t.set(seekerWallet, { userId: asn.seekerId, balance: FieldValue.increment(seekerRefund) }, { merge: true });
+            }
+
+            t.update(assignmentRef, {
+                status: writerPayout > 0 ? 'COMPLETED' : 'CANCELLED',
+                disputeResolution: 'SELF_NEGOTIATED',
+                disputeWriterShare: share,
+                disputeResolvedAt: FieldValue.serverTimestamp(),
+                disputeProposal: null
+            });
+
+            return { writerId: asn.activeWriterId, seekerId: asn.seekerId, writerPayout, seekerRefund };
+        });
+
+        createNotification(result.writerId, { type: 'DISPUTE_RESOLVED', title: '✅ Dispute settled!', body: 'A settlement was agreed upon and funds released.' });
+        createNotification(result.seekerId, { type: 'DISPUTE_RESOLVED', title: '✅ Dispute settled!', body: 'A settlement was agreed upon and refund issued.' });
+
+        res.json({ message: 'Dispute resolved via mutual agreement' });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
 // =====================================================================
 // MESSAGING — chat between seeker and assigned writer per assignment
 // =====================================================================
@@ -1319,8 +1432,33 @@ app.post('/api/support/chat', aiLimiter, requireAuth, async (req, res) => {
             messages = [];
         }
 
+        // Contextual awareness: check if user needs human help
+        const frustrationKeywords = ['human', 'person', 'scam', 'cheat', 'fake', 'stole', 'money', 'complain', 'frustrated', 'bad service'];
+        const needsHuman = frustrationKeywords.some(k => message.toLowerCase().includes(k));
+
+        if (needsHuman) {
+            // Trigger a silent event for admins
+            await db.collection('events').add({
+                service: 'CONCIERGE',
+                description: `👤 User ${req.user.uid} requested human help or expressed frustration: "${message.substring(0, 50)}..."`,
+                status: 'WARNING',
+                timestamp: FieldValue.serverTimestamp()
+            });
+            
+            // Also notify the admin directly if an admin user exists
+            const adminSnap = await db.collection('users').where('role', '==', 'ADMIN').limit(1).get();
+            if (!adminSnap.empty) {
+                createNotification(adminSnap.docs[0].id, {
+                    type: 'HUMAN_SUPPORT_REQUESTED',
+                    title: '🚨 Human support requested',
+                    body: `User ${req.user.uid.substring(0, 5)} needs help. Check Concierge logs.`,
+                    meta: { userId: req.user.uid, message }
+                });
+            }
+        }
+
         const response = await ai.generate({
-            system: systemPrompt,
+            system: systemPrompt + (needsHuman ? "\nThe user seems frustrated or wants a person. Reassure them and mention that an admin has been alerted." : ""),
             prompt: message,
             messages: messages
         });
@@ -1412,13 +1550,39 @@ app.get('/api/admin/disputes', requireAuth, requireAdmin, async (_req, res) => {
 
 // --- RESOLVE DISPUTE (admin pays writer, refunds seeker, or splits) ---
 // body: { resolution: 'RELEASE_WRITER' | 'REFUND_SEEKER' | 'SPLIT', writerShare?: 0..1, note?: string }
+// --- RESOLVE DISPUTE (admin pays writer, refunds seeker, or splits) ---
+// body: { resolution: 'RELEASE_WRITER' | 'REFUND_SEEKER' | 'SPLIT', writerShare?: 0..1, note?: string }
 app.post('/api/admin/disputes/:id/resolve', requireAuth, requireAdmin, async (req, res) => {
     try {
         const { resolution, writerShare, note } = req.body;
-        if (!['RELEASE_WRITER', 'REFUND_SEEKER', 'SPLIT'].includes(resolution)) {
+        if (!['RELEASE_WRITER', 'REFUND_SEEKER', 'SPLIT', 'SMART_RESOLVE'].includes(resolution)) {
             return res.status(400).json({ error: 'Invalid resolution' });
         }
-        const share = resolution === 'SPLIT' ? Number(writerShare) : (resolution === 'RELEASE_WRITER' ? 1 : 0);
+        
+        let share = resolution === 'SPLIT' ? Number(writerShare) : (resolution === 'RELEASE_WRITER' ? 1 : 0);
+        
+        // Handle AI-driven smart resolve
+        let aiNote = '';
+        if (resolution === 'SMART_RESOLVE') {
+            const assignmentSnap = await db.collection('assignments').doc(req.params.id).get();
+            const messagesSnap = await db.collection('messages').where('assignmentId', '==', req.params.id).orderBy('timestamp', 'asc').limit(20).get();
+            const asn = assignmentSnap.data();
+            const chatText = messagesSnap.docs.map(d => `${d.data().senderId === asn.seekerId ? 'Seeker' : 'Writer'}: ${d.data().text}`).join('\n');
+            
+            const analysis = await ai.generate({
+                system: "You are the Writely Dispute Arbiter. Analyze the project details and chat logs to recommend a fair split. Return ONLY a JSON object: { writerShare: 0..1, reason: 'string' }",
+                prompt: `Project: ${asn.title}\nDescription: ${asn.description}\nDispute Reason: ${asn.disputeReason}\nChat History:\n${chatText}`
+            });
+            
+            try {
+                const parsed = JSON.parse(analysis.text.match(/\{.*\}/s)?.[0] || '{}');
+                share = Number(parsed.writerShare);
+                aiNote = `[AI Recommendation] ${parsed.reason}`;
+            } catch (e) {
+                return res.status(500).json({ error: 'Smart resolution failed to parse AI analysis' });
+            }
+        }
+
         if (Number.isNaN(share) || share < 0 || share > 1) {
             return res.status(400).json({ error: 'writerShare must be 0..1' });
         }
@@ -1471,17 +1635,17 @@ app.post('/api/admin/disputes/:id/resolve', requireAuth, requireAdmin, async (re
                 disputeWriterShare: share,
                 disputeResolvedAt: FieldValue.serverTimestamp(),
                 disputeResolvedBy: req.user.uid,
-                disputeNote: String(note || '').substring(0, 500)
+                disputeNote: String(note || aiNote).substring(0, 1000)
             });
 
-            return { writerId: asn.activeWriterId, seekerId: asn.seekerId, writerPayout, seekerRefund, title: asn.title };
+            return { writerId: asn.activeWriterId, seekerId: asn.seekerId, writerPayout, seekerRefund, title: asn.title, share };
         });
 
         // Audit + notifications
         await db.collection('events').add({
             service: 'DISPUTE',
-            description: `Dispute resolved on #${req.params.id} by admin ${req.user.uid} (${resolution})`,
-            status: 'INFO',
+            description: `⚖️ Dispute resolved on #${req.params.id} (${resolution}). Split: ${result.share * 100}% Writer / ${(1 - result.share) * 100}% Seeker`,
+            status: 'SUCCESS',
             timestamp: FieldValue.serverTimestamp()
         });
 
@@ -1502,7 +1666,7 @@ app.post('/api/admin/disputes/:id/resolve', requireAuth, requireAdmin, async (re
             meta: { assignmentId: req.params.id }
         });
 
-        res.json({ message: 'Dispute resolved', ...result });
+        res.json({ message: 'Dispute resolved successfully', ...result });
     } catch (err) {
         const code = err.code === 'NOT_FOUND' ? 404 : err.code === 'BAD_STATE' ? 409 : 400;
         console.error('Resolve dispute error:', err.message);

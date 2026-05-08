@@ -536,13 +536,14 @@ nav {
     /* Support chat — full-width on mobile */
     #aiSupport { bottom: 20px; right: 20px; width: 56px; height: 56px; }
     .support-window {
-        bottom: 90px;
+        bottom: 80px;
         right: 12px;
         left: 12px;
         width: auto;
-        height: calc(100vh - 120px);
-        max-height: 600px;
-        border-radius: 20px;
+        height: auto;
+        max-height: calc(100vh - 100px);
+        border-radius: 24px;
+        transform-origin: bottom center;
     }
     .msg { max-width: 85%; }
 

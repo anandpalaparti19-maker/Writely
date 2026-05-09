@@ -359,10 +359,10 @@
                 div.innerHTML = messages.map(m => {
                     const isSent = m.senderId === currentUserId;
                     let timeStr = '';
-                    if (m.createdAt && typeof m.createdAt.toDate === 'function') {
-                        timeStr = m.createdAt.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                    } else if (m.createdAt) {
-                        timeStr = new Date(m.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    if (m.timestamp && typeof m.timestamp.toDate === 'function') {
+                        timeStr = m.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    } else if (m.timestamp) {
+                        timeStr = new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                     }
                     return `
                         <div class="message ${isSent ? 'message-sent' : 'message-received'}">

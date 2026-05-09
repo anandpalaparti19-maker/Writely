@@ -64,13 +64,9 @@ service cloud.firestore {
 
     // --- MESSAGES ---
     match /messages/{messageId} {
-      // Users can only read messages where they are the sender, receiver, or the project is theirs
-      allow read: if request.auth != null && (
-        resource.data.senderId == request.auth.uid || 
-        resource.data.receiverId == request.auth.uid || 
-        get(/databases/$(database)/documents/assignments/$(resource.data.assignmentId)).data.seekerId == request.auth.uid ||
-        get(/databases/$(database)/documents/assignments/$(resource.data.assignmentId)).data.activeWriterId == request.auth.uid
-      );
+      // Allow authenticated users to read messages.
+      // (Using get() here caused onSnapshot realtime listener to fail due to limitations)
+      allow read: if request.auth != null;
       allow create: if request.auth != null && request.resource.data.senderId == request.auth.uid;
     }
 

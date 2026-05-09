@@ -42,7 +42,7 @@ try {
 (function initAppCheck() {
     try {
         if (typeof firebase === 'undefined' || !firebase.appCheck) return;
-        const RECAPTCHA_SITE_KEY = '6Lc54OAsAAAAAC6vm59d2v3L8K9dwlyJf54nSY4e'; // reCAPTCHA v3 site key
+        const RECAPTCHA_SITE_KEY = '6Lc54OAsAAAAAAFvdfWOMjeM6u4mC5kdTCv1Waet'; // reCAPTCHA v3 site key
         
         // Enable debug token for local development to bypass App Check Enforcement
         if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {

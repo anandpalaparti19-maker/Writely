@@ -43,6 +43,13 @@ try {
     try {
         if (typeof firebase === 'undefined' || !firebase.appCheck) return;
         const RECAPTCHA_SITE_KEY = '6Lc54OAsAAAAAC6vm59d2v3L8K9dwlyJf54nSY4e'; // reCAPTCHA v3 site key
+        
+        // Enable debug token for local development to bypass App Check Enforcement
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+            console.log("⚠️ App Check Debug Mode Enabled. Check console for token and add it to Firebase Console.");
+        }
+
         if (!RECAPTCHA_SITE_KEY) {
             console.warn('⚠️ App Check: reCAPTCHA site key not set. Add it to logic.js to activate App Check protection.');
             return;

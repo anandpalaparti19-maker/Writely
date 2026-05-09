@@ -4,12 +4,17 @@ service cloud.firestore {
     
     // --- USER PROFILES ---
     match /users/{userId} {
-      // Users can only read their own profile or public profiles (if needed)
-      allow read: if request.auth != null;
+      // FIX #5: Users can ONLY read their own profile.
+      // Previously `allow read: if request.auth != null` let ANY logged-in user
+      // read ANY other user's document (exposing phone, city, pincode, role, etc.).
+      // Writer/seeker public profile data (avgRating, displayName) must be fetched
+      // via the backend API which exposes only safe, curated fields.
+      allow read: if request.auth != null && request.auth.uid == userId;
       allow create: if request.auth != null && request.auth.uid == userId;
       // Users CANNOT modify their own subscription/wallet status — backend only
       allow update: if request.auth != null && request.auth.uid == userId
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['subscription', 'writerSubscription', 'role', 'metrics']);
+
 
       // --- NOTIFICATIONS (subcollection) ---
       // Each user has their own notifications. Only owner can read.

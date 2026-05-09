@@ -3,6 +3,9 @@
  */
 
 // Your web app's Firebase configuration
+// NOTE (Security #1): Firebase client config keys are intentionally public — the SDK
+// requires them to identify the project. The REAL lock is Firestore Security Rules +
+// Firebase App Check (initialized below). Do NOT put server-side secrets here.
 const firebaseConfig = {
   apiKey: "AIzaSyCbZu69j_2STCm7QCaJbkKfaO2S9kqjcRI",
   authDomain: "writely-304a8.firebaseapp.com",
@@ -28,6 +31,34 @@ try {
     console.error("❌ Firebase Init Error:", e);
 }
 
+// --- FIX #1: FIREBASE APP CHECK ---
+// App Check ensures only genuine, un-tampered instances of THIS app can call Firebase
+// services — even if someone sees the config keys in source. It uses reCAPTCHA v3 for
+// web clients (invisible to legitimate users). To activate:
+//   1. Go to Firebase Console → App Check → Register your web app
+//   2. Choose reCAPTCHA v3 and add your reCAPTCHA site key below
+//   3. In Firebase Console, enforce App Check on Firestore, Storage, and Auth
+// Until enforced, App Check runs in "debug" / "unenforced" mode (harmless).
+(function initAppCheck() {
+    try {
+        if (typeof firebase === 'undefined' || !firebase.appCheck) return;
+        const RECAPTCHA_SITE_KEY = '6Lc54OAsAAAAAC6vm59d2v3L8K9dwlyJf54nSY4e'; // reCAPTCHA v3 site key
+        if (!RECAPTCHA_SITE_KEY) {
+            console.warn('⚠️ App Check: reCAPTCHA site key not set. Add it to logic.js to activate App Check protection.');
+            return;
+        }
+        firebase.appCheck().activate(
+            new firebase.appCheck.ReCaptchaV3Provider(RECAPTCHA_SITE_KEY),
+            true // auto-refresh token
+        );
+        console.log('🛡️ App Check activated');
+    } catch (e) {
+        console.warn('App Check init skipped:', e.message);
+    }
+})();
+
+
+
 const Writely = {
     events: [],
     API_URL: (function() {
@@ -38,7 +69,7 @@ const Writely = {
         return 'https://writely-55q5.onrender.com/api';
     })(),
 
-window.Writely = Writely; // Expose globally immediately
+
 
     init: async function() {
         console.log("🌐 Writely API Context:", this.API_URL);
@@ -324,7 +355,15 @@ window.loginUser = async function(event) {
         if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = "Signing in..."; }
         const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
         const user = userCredential.user;
-        
+
+        // --- FIX #4: Block unverified email accounts ---
+        if (!user.emailVerified) {
+            await firebase.auth().signOut();
+            alert('📧 Please verify your email before logging in.\n\nCheck your inbox (and spam folder) for the verification link we sent when you registered.');
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = "Sign In"; }
+            return;
+        }
+
         const userDoc = await firebase.firestore().collection('users').doc(user.uid).get();
         if (userDoc.exists && userDoc.data().role === 'WRITER') {
             window.location.href = window.location.pathname.includes('seeker-web') ? '../writer-mobile/writer.html' : 'writer.html';
@@ -441,11 +480,14 @@ Writely.submitBid = async function(assignmentId, bidData) {
     }
 };
 
-Writely.assignWriter = async function(assignmentId, writerId) {
+// --- FIX #3: writerId is NOT sent from the client.
+// The backend derives the writer's identity from the verified Firebase ID token (req.user.uid).
+// Sending writerId from the client would allow any user to impersonate another writer.
+Writely.assignWriter = async function(assignmentId) {
     try {
         const response = await this.apiFetch(`/assignments/${assignmentId}/assign`, {
             method: 'POST',
-            body: JSON.stringify({ writerId })
+            body: JSON.stringify({}) // writerId resolved server-side from auth token
         });
         return await response.json();
     } catch (err) {

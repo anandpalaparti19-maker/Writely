@@ -871,11 +871,14 @@ app.post('/api/assignments/:id/bid', requireAuth, async (req, res) => {
     }
 });
 
-// --- ASSIGN WRITER & START PROJECT (only the SEEKER can do this) ---
+// --- ASSIGN WRITER & START PROJECT ---
+// FIX #3: writerId is derived from the authenticated token (req.user.uid), NOT from the request body.
+// This prevents any user from sending an arbitrary writerId to hijack assignments.
+// The writer must call this endpoint themselves — they are the one accepting the job.
 app.post('/api/assignments/:id/assign', requireAuth, async (req, res) => {
     try {
-        const { writerId } = req.body;
-        if (!writerId) return res.status(400).json({ error: 'writerId required' });
+        // Always use the authenticated caller's UID as the writerId
+        const writerId = req.user.uid;
 
         const assignmentRef = db.collection('assignments').doc(req.params.id);
         
@@ -884,9 +887,9 @@ app.post('/api/assignments/:id/assign', requireAuth, async (req, res) => {
             if (!snap.exists) throw new Error("Assignment not found");
             const assignment = snap.data();
 
-            // Ownership: only the seeker who owns the assignment can hire
-            if (assignment.seekerId !== req.user.uid) {
-                throw new Error("Only the seeker can hire a writer");
+            // Prevent seekers from accepting their own assignments as a writer
+            if (assignment.seekerId === writerId) {
+                throw new Error("You cannot accept your own assignment");
             }
             if (assignment.status !== 'POSTED' && assignment.status !== 'BIDDING') {
                 throw new Error("Project is no longer available for hiring");
@@ -925,7 +928,7 @@ app.post('/api/assignments/:id/assign', requireAuth, async (req, res) => {
         });
 
         // Notify the hired writer (fire-and-forget)
-        createNotification(req.body.writerId, {
+        createNotification(writerId, {
             type: 'BID_ACCEPTED',
             title: '🎉 You won a bid!',
             body: 'A seeker accepted your bid. Funds are locked in escrow — start working!',

@@ -553,9 +553,9 @@
         async function acceptProject(assignmentId) {
             if(!confirm("Accept this project and start writing?")) return;
             try {
-                const user = firebase.auth().currentUser;
-                // This will set the status to ACTIVE and send the auto-message
-                const result = await Writely.assignWriter(assignmentId, user.uid);
+                // FIX #3: writerId is resolved server-side from the auth token.
+                // We no longer pass user.uid from the client.
+                const result = await Writely.assignWriter(assignmentId);
                 if(result.message) {
                     alert("Project Started! Message sent: 'I am started writing'");
                     location.reload();

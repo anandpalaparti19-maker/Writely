@@ -77,8 +77,12 @@ service cloud.firestore {
     // --- TRANSACTIONS & WALLETS ---
     // Strictly backend only for financial safety
     match /transactions/{transactionId} {
-      // Users can read transactions where they are the receiver (matches our backend writes)
-      allow read: if request.auth != null && resource.data.receiverId == request.auth.uid;
+      // FIX: Users can read transactions where they are the receiver (writer payouts, top-ups)
+      // OR the sender (seeker escrow locks, fees) — so both parties see their own history.
+      allow read: if request.auth != null && (
+        resource.data.receiverId == request.auth.uid ||
+        resource.data.senderId == request.auth.uid
+      );
       allow write: if false;
     }
 

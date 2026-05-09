@@ -306,11 +306,16 @@
 
                     if (jobs.length > 0) {
                         container.innerHTML = jobs.map(job => {
-                            const payout = job.budget - 15;
+                            // FIX XSS: escape ALL user-generated fields before inserting into innerHTML
+                            const safeTitle = Writely.escapeHtml(job.title || '');
+                            const safeDesc  = Writely.escapeHtml(job.description || 'No description provided.');
+                            const safeId    = Writely.escapeHtml(job.id || '');
+                            const payout    = job.budget - 15;
+
                             let upsellTags = '';
                             if (job.pages <= 20 && job.description?.toLowerCase().includes('urgent')) upsellTags += '<span class="job-tag" style="background: #FEE2E2; color: #EF4444;">⚡ 24H Delivery</span>';
                             if (job.deliveryMethod === 'Physical') upsellTags += '<span class="job-tag" style="background: #E0F2FE; color: #0369A1;">📦 Physical</span>';
-                            
+
                             let attachmentsHtml = '';
                             if (job.attachments && job.attachments.length > 0) {
                                 attachmentsHtml = `<div style="margin: 12px 0; font-size:12px; color:var(--text-secondary);">📎 ${job.attachments.length} attachment(s) included. Available after accepting.</div>`;
@@ -320,12 +325,12 @@
                             <div class="job-card animate-fade-in">
                                 <div class="job-header">
                                     <div>
-                                        <h4 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">${job.title}</h4>
+                                        <h4 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">${safeTitle}</h4>
                                         <div style="color: var(--text-secondary); font-size: 13px;">${job.pages || 0} Pages • Verified Project</div>
                                     </div>
                                     <div class="job-price" style="color: var(--flow-teal);">₹${payout}</div>
                                 </div>
-                                <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.5; margin: 12px 0;">${job.description || 'No description provided.'}</p>
+                                <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.5; margin: 12px 0;">${safeDesc}</p>
                                 ${attachmentsHtml}
                                 <div style="display: flex; justify-content: space-between; align-items: flex-end;">
                                     <div class="job-tags">
@@ -333,7 +338,7 @@
                                         ${upsellTags}
                                     </div>
                                     <div style="display: flex; gap: 8px;">
-                                        <button onclick="acceptProject('${job.id}')" class="btn btn-primary" style="background: #10B981; border:none; padding: 8px 16px; font-size: 14px;">Accept & Start</button>
+                                        <button onclick="acceptProject('${safeId}')" class="btn btn-primary" style="background: #10B981; border:none; padding: 8px 16px; font-size: 14px;">Accept & Start</button>
                                     </div>
                                 </div>
                             </div>
@@ -424,19 +429,25 @@
                             attachmentsHtml = `<div style="margin-top:12px;">${items}</div>`;
                         }
 
+                        // FIX XSS: escape user-generated fields in active jobs section too
+                        const safeJobTitle   = Writely.escapeHtml(job.title || '');
+                        const safeJobId      = Writely.escapeHtml(job.id || '');
+                        const safeDelivery   = Writely.escapeHtml(job.deliveryMethod || 'Digital');
+                        const safeAddress    = Writely.escapeHtml(job.deliveryAddress || 'Ask seeker');
+
                         return `
                         <div class="job-card" style="border-left: 4px solid var(--ink-purple); margin-bottom:16px;">
                             <div style="display:flex; justify-content:space-between; align-items:center;">
                                 <div>
-                                    <h4 style="font-size: 16px; font-weight: 700;">${job.title}</h4>
+                                    <h4 style="font-size: 16px; font-weight: 700;">${safeJobTitle}</h4>
                                     <div style="font-size: 12px; color: var(--text-secondary); margin-top:4px;">
-                                        ${job.deliveryMethod === 'Physical' ? '📦 Physical Delivery • Address: ' + (job.deliveryAddress || 'Ask seeker') : '📄 Digital PDF Required'}
+                                        ${safeDelivery === 'Physical' ? '📦 Physical Delivery • Address: ' + safeAddress : '📄 Digital PDF Required'}
                                     </div>
                                     ${attachmentsHtml}
                                 </div>
                                 <div style="display:flex; gap:8px; flex-direction:column; align-items:stretch;">
-                                    <a href="messages.html#${job.id}" class="btn btn-secondary" style="padding: 8px 16px; font-size: 13px; text-align:center;">Chat</a>
-                                    <button onclick="openSubmitModal('${job.id}', '${job.deliveryMethod}')" class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;">Deliver</button>
+                                    <a href="messages.html#${safeJobId}" class="btn btn-secondary" style="padding: 8px 16px; font-size: 13px; text-align:center;">Chat</a>
+                                    <button onclick="openSubmitModal('${safeJobId}', '${safeDelivery}')" class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;">Deliver</button>
                                 </div>
                             </div>
                         </div>
@@ -447,8 +458,11 @@
                     noActive.style.display = 'block';
                 }
 
-                // Rating (Mock for now or 0.0)
-                document.getElementById('statRating').innerText = "5.0"; 
+                // FIX: Display real average rating from Firestore profile metrics
+                const profile = await Writely.getUserProfile();
+                const avgRating = profile?.metrics?.avgRating;
+                const reviewCount = profile?.metrics?.reviewCount || 0;
+                document.getElementById('statRating').innerText = avgRating ? avgRating.toFixed(1) : (reviewCount === 0 ? 'New' : '—');
 
             } catch (err) { console.error(err); }
         }

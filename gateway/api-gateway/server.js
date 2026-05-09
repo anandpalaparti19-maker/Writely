@@ -569,6 +569,7 @@ app.post('/api/assignments/:id/escrow', requireAuth, async (req, res) => {
 
         await db.collection('transactions').add({
             assignmentId: req.params.id,
+            senderId: assignment.seekerId,
             amount: totalAmount,
             type: 'ESCROW_LOCK',
             status: 'COMPLETED',
@@ -627,6 +628,7 @@ app.post('/api/assignments/:id/release', requireAuth, async (req, res) => {
             // Audit transaction
             t.set(db.collection('transactions').doc(), {
                 assignmentId: req.params.id,
+                senderId: assignment.seekerId,
                 receiverId: assignment.activeWriterId,
                 amount: writerPayout,
                 type: 'PAYOUT',
@@ -905,6 +907,7 @@ app.post('/api/assignments/:id/assign', requireAuth, async (req, res) => {
 
             t.set(db.collection('transactions').doc(), {
                 assignmentId: req.params.id,
+                senderId: assignment.seekerId,
                 amount: totalAmount,
                 type: 'ESCROW_LOCK',
                 status: 'COMPLETED',

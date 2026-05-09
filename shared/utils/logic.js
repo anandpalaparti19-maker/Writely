@@ -139,9 +139,12 @@ const Writely = {
 
         if (response.status === 401) {
             console.warn('Auth expired — redirecting to login');
-            // Only auto-redirect on actual pages, not from admin.html etc on first load
             if (!window.location.pathname.endsWith('index.html') && !window.location.pathname.endsWith('/')) {
-                window.location.href = '/apps/seeker-web/index.html';
+                // FIX: detect which portal we're in and redirect to the correct login
+                const isWriterPortal = window.location.pathname.includes('writer-mobile');
+                window.location.href = isWriterPortal
+                    ? '/apps/writer-mobile/index.html'
+                    : '/apps/seeker-web/index.html';
             }
         }
         return response;

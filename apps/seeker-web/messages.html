@@ -87,26 +87,57 @@
             display: flex;
             flex-direction: column;
             gap: 16px;
+            background-color: #EFEAE2;
+            background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
+            background-repeat: repeat;
         }
         .message {
-            max-width: 60%;
-            padding: 12px 16px;
-            border-radius: 16px;
-            font-size: 14px;
+            max-width: 65%;
+            padding: 8px 12px 24px 12px;
+            border-radius: 8px;
+            font-size: 14.5px;
             line-height: 1.5;
+            position: relative;
+            box-shadow: 0 1px 1px rgba(0,0,0,0.1);
         }
         .message-sent {
             align-self: flex-end;
-            background: var(--ink-purple);
-            color: white;
-            border-bottom-right-radius: 4px;
+            background: #D9FDD3;
+            color: #111B21;
+            border-top-right-radius: 0;
+        }
+        .message-sent::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: -8px;
+            width: 0;
+            height: 0;
+            border-left: 8px solid #D9FDD3;
+            border-bottom: 8px solid transparent;
         }
         .message-received {
             align-self: flex-start;
             background: white;
-            color: var(--text-primary);
-            border: 1px solid var(--border);
-            border-bottom-left-radius: 4px;
+            color: #111B21;
+            border-top-left-radius: 0;
+        }
+        .message-received::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -8px;
+            width: 0;
+            height: 0;
+            border-right: 8px solid white;
+            border-bottom: 8px solid transparent;
+        }
+        .msg-time {
+            position: absolute;
+            bottom: 4px;
+            right: 8px;
+            font-size: 11px;
+            color: rgba(0,0,0,0.45);
         }
         .chat-input-area {
             padding: 24px 32px;
@@ -327,7 +358,18 @@
                 }
                 div.innerHTML = messages.map(m => {
                     const isSent = m.senderId === currentUserId;
-                    return `<div class="message ${isSent ? 'message-sent' : 'message-received'}">${escapeHtml(m.text)}</div>`;
+                    let timeStr = '';
+                    if (m.createdAt && typeof m.createdAt.toDate === 'function') {
+                        timeStr = m.createdAt.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    } else if (m.createdAt) {
+                        timeStr = new Date(m.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    }
+                    return `
+                        <div class="message ${isSent ? 'message-sent' : 'message-received'}">
+                            ${escapeHtml(m.text)}
+                            <div class="msg-time">${timeStr}</div>
+                        </div>
+                    `;
                 }).join('');
                 div.scrollTop = div.scrollHeight;
             });

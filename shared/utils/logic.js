@@ -296,6 +296,12 @@ window.registerUser = async function(event) {
         return;
     }
 
+    // Phone validation
+    if (phoneNumber && !/^(\+91[\-\s]?)?[0]?(91)?[6789]\d{9}$/.test(phoneNumber)) {
+        alert('Please enter a valid Indian phone number.');
+        return;
+    }
+
     // Password strength — 8+ chars, ≥1 uppercase, ≥2 lowercase, ≥1 special
     const pwdCheck = Writely.validatePassword(password);
     if (!pwdCheck.ok) {

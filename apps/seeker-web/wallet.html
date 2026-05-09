@@ -8,9 +8,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
     <script src="../../shared/utils/logic.js" defer></script>
     <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
     <style>
@@ -150,8 +150,8 @@
                     <div id="walletBalance" style="font-size: 48px; font-weight: 800;">₹0</div>
                 </div>
                 <div style="display:flex; gap:16px;">
-                    <button class="btn" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 12px 24px; border-radius: 12px; font-weight: 600;">Withdraw</button>
-                    <button class="btn" style="background: white; color: var(--ink-purple); border: none; padding: 12px 24px; border-radius: 12px; font-weight: 600;" onclick="addFunds()">+ Add Funds</button>
+                    <button class="btn" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 12px 24px; border-radius: 12px; font-weight: 600;" onclick="alert('Withdrawals directly from the wallet are coming soon! Currently, refunds are processed manually upon request.')">Withdraw</button>
+                    <button id="addFundsBtn" class="btn" style="background: white; color: var(--ink-purple); border: none; padding: 12px 24px; border-radius: 12px; font-weight: 600;" onclick="addFunds()">+ Add Funds</button>
                 </div>
             </div>
 
@@ -248,6 +248,13 @@
                 alert('Please enter a valid amount between ₹100 and ₹50,000.');
                 return;
             }
+            
+            const btn = document.getElementById('addFundsBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Processing...';
+            btn.disabled = true;
+            btn.style.opacity = '0.7';
+
             try {
                 const added = await Writely.topUpWallet(amount);
                 alert(`✅ ₹${added.toLocaleString()} added to your wallet!`);
@@ -259,6 +266,10 @@
             } catch (err) {
                 console.error('Top-up failed:', err);
                 alert('Payment failed: ' + (err.message || 'Unknown error'));
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                btn.style.opacity = '1';
             }
         }
 

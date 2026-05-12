@@ -810,7 +810,7 @@ app.post('/api/assignments', requireAuth, upload.array('attachments', 5), async 
         const cleanPincode = String(pincode || '').replace(/\D/g, '').slice(0, 6);
         const cleanCity = String(city || '').trim().slice(0, 80);
 
-        await db.collection('assignments').add({
+        const docRef = await db.collection('assignments').add({
             title: title.trim(),
             description: description.trim(),
             pages: Number(pages) || 0,

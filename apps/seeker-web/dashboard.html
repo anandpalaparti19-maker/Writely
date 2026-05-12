@@ -457,38 +457,39 @@
         }
 
         async function loadDashboardData() {
-            const user = firebase.auth().currentUser;
-            if(!user) return;
-
             const list = document.getElementById('assignmentList');
-            
             try {
+                // Wait for auth properly instead of using currentUser directly
+                const user = await Writely.waitForAuth();
+                if (!user) {
+                    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary);">Not logged in. <a href="login.html">Login</a></div>';
+                    return;
+                }
+
                 const snapshot = await firebase.firestore().collection('assignments')
                     .where('seekerId', '==', user.uid)
                     .get();
                 
-                // Client-side sorting to avoid Firestore Composite Index requirements
                 let assignments = [];
                 snapshot.forEach(doc => assignments.push({ id: doc.id, ...doc.data() }));
                 assignments.sort((a, b) => {
                     const timeA = a.createdAt ? a.createdAt.toMillis() : 0;
                     const timeB = b.createdAt ? b.createdAt.toMillis() : 0;
-                    return timeB - timeA; // Descending
+                    return timeB - timeA;
                 });
 
                 let active = 0, completed = 0, escrow = 0;
                 
-                if(assignments.length === 0) {
-                    list.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-secondary);">No assignments found. Click "Post New Assignment" to start.</div>';
+                if (assignments.length === 0) {
+                    list.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-secondary);">No assignments yet. Click "New Assignment" to start.</div>';
                 } else {
                     list.innerHTML = '';
                     assignments.forEach(job => {
-                        if(job.status === 'ACTIVE' || job.status === 'POSTED') active++;
-                        if(job.status === 'COMPLETED') completed++;
-                        if(job.status === 'ACTIVE') escrow += (job.totalSeekerPaid || job.budget);
+                        if (job.status === 'ACTIVE' || job.status === 'POSTED') active++;
+                        if (job.status === 'COMPLETED') completed++;
+                        if (job.status === 'ACTIVE') escrow += (job.totalSeekerPaid || job.budget);
                     });
 
-                    // Only show top 5 in UI
                     assignments.slice(0, 5).forEach(job => {
                         const card = document.createElement('div');
                         card.className = 'assignment-card';
@@ -499,7 +500,7 @@
                             </div>
                             <div style="text-align: right; display: flex; align-items: center; gap: 20px;">
                                 <span class="status-badge ${job.status === 'POSTED' ? 'status-pending' : 'status-active'}">${job.status}</span>
-                                <div style="font-weight: 700;">₹${job.budget.toLocaleString()}</div>
+                                <div style="font-weight: 700;">₹${(job.budget||0).toLocaleString()}</div>
                             </div>
                         `;
                         list.appendChild(card);
@@ -511,7 +512,8 @@
                 document.getElementById('statEscrowBalance').innerText = `₹${escrow.toLocaleString()}`;
             } catch (err) {
                 console.error("Failed to load assignments:", err);
-                list.innerHTML = '<div style="text-align:center; padding:40px; color:#EF4444;">Failed to load cloud projects.</div>';
+                // Show the REAL error on screen so we can diagnose
+                list.innerHTML = `<div style="text-align:center;padding:40px;color:#EF4444;">Error: ${err.code || err.message || 'Unknown error'}</div>`;
             }
         }
 

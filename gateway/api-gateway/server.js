@@ -80,6 +80,7 @@ const upload = multer({
 });
 
 const app = express();
+app.set('trust proxy', 1); // Trust Render's proxy for express-rate-limit
 
 // --- CORS: restrict to trusted origins ---
 const allowedOriginPatterns = [
@@ -99,15 +100,13 @@ app.use(cors({
         if (!origin) return cb(null, true);
 
         // 2. Normalize and check against patterns
-        const normalized = String(origin).trim().toLowerCase();
+        const normalized = String(origin).replace(/\/$/, '').toLowerCase();
         const isAllowed = allowedOriginPatterns.some(rx => rx.test(normalized));
 
         if (isAllowed) {
             cb(null, true);
         } else {
-            console.warn('⚠️ CORS blocked origin:', origin);
-            // Return false instead of an Error to avoid triggering the global 500 handler
-            // Browsers will still block the request but the server won't crash/error.
+            console.error(`❌ CORS blocked origin: [${origin}] - Does not match allowed patterns.`);
             cb(null, false);
         }
     },

@@ -445,17 +445,20 @@ window.loginUser = async function(event) {
 };
 
 // --- PROFILE & SETTINGS ---
-Writely.getUserProfile = async function() {
+Writely.waitForAuth = function() {
     return new Promise((resolve) => {
-        firebase.auth().onAuthStateChanged(async (user) => {
-            if (user) {
-                const doc = await firebase.firestore().collection("users").doc(user.uid).get();
-                resolve(doc.exists ? doc.data() : null);
-            } else {
-                resolve(null);
-            }
+        const unsubscribe = firebase.auth().onAuthStateChanged((user) => {
+            unsubscribe();
+            resolve(user);
         });
     });
+};
+
+Writely.getUserProfile = async function() {
+    const user = await this.waitForAuth();
+    if (!user) return null;
+    const doc = await firebase.firestore().collection('users').doc(user.uid).get();
+    return doc.exists ? doc.data() : null;
 };
 
 Writely.updateUserProfile = async function(data) {

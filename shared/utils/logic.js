@@ -435,7 +435,11 @@ window.loginUser = async function(event) {
         }
 
         const userDoc = await firebase.firestore().collection('users').doc(user.uid).get();
-        if (userDoc.exists && userDoc.data().role === 'WRITER') {
+        const userData = userDoc.exists ? userDoc.data() : {};
+        
+        if (userData.role === 'ADMIN') {
+            window.location.href = '../admin-web/admin.html';
+        } else if (userData.role === 'WRITER') {
             window.location.href = window.location.pathname.includes('seeker-web') ? '../writer-mobile/writer.html' : 'writer.html';
         } else {
             window.location.href = 'dashboard.html';

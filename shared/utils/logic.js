@@ -388,27 +388,17 @@ window.registerUser = async function(event) {
             throw new Error(result.error || 'Registration failed');
         }
 
-        // --- NEW: Trigger Verification Email (Rule 04) ---
-        // We do a brief silent login to trigger the verification email from the client,
-        // then sign out immediately to enforce the "verified-only" dashboard rule.
-        try {
-            const userCred = await firebase.auth().signInWithEmailAndPassword(email, password);
-            if (userCred.user) {
-                await userCred.user.sendEmailVerification();
-                await firebase.auth().signOut();
-            }
-        } catch (authErr) {
-            console.warn('Verification trigger failed (non-fatal):', authErr.message);
-        }
-
-        const successMessage = 'Account created successfully! 📧 A verification link has been sent to your inbox.';
-        alert(`${successMessage}\n\nPlease verify your email to access your dashboard.`);
+        // --- Direct Login (Bypassing Verification Rule) ---
+        await firebase.auth().signInWithEmailAndPassword(email, password);
         
-        // Robust redirection to login
-        const loginUrl = window.location.pathname.includes('register.html') 
-            ? 'login.html' 
-            : '/apps/seeker-web/login.html';
-        window.location.href = `${loginUrl}?registered=1&email=${encodeURIComponent(email)}`;
+        // Redirect based on role
+        if (role === 'ADMIN') {
+            window.location.href = '../admin-web/admin.html';
+        } else if (role === 'WRITER') {
+            window.location.href = window.location.pathname.includes('seeker-web') ? '../writer-mobile/writer.html' : 'writer.html';
+        } else {
+            window.location.href = 'dashboard.html';
+        }
     } catch (error) {
         alert("Registration Failed: " + error.message);
         if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = "Create Account"; }
@@ -426,13 +416,8 @@ window.loginUser = async function(event) {
         const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
         const user = userCredential.user;
 
-        // --- FIX #4: Block unverified email accounts ---
-        if (!user.emailVerified) {
-            await firebase.auth().signOut();
-            alert('📧 Please verify your email before logging in.\n\nCheck your inbox (and spam folder) for the verification link we sent when you registered.');
-            if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = "Sign In"; }
-            return;
-        }
+        // --- Email Verification Check Disabled for Onboarding Smoothness ---
+        // if (!user.emailVerified) { ... }
 
         const userDoc = await firebase.firestore().collection('users').doc(user.uid).get();
         const userData = userDoc.exists ? userDoc.data() : {};

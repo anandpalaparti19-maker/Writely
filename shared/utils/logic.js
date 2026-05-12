@@ -388,17 +388,26 @@ window.registerUser = async function(event) {
             throw new Error(result.error || 'Registration failed');
         }
 
+        console.log("🚀 Registration successful. Starting auto-login for:", email);
+        
         // --- Direct Login (Bypassing Verification Rule) ---
         await firebase.auth().signInWithEmailAndPassword(email, password);
+        console.log("🔑 Auto-login complete. Detecting redirect path...");
         
-        // Redirect based on role
+        // Final Redirection
+        let targetUrl = 'dashboard.html'; // Default
+        
         if (role === 'ADMIN') {
-            window.location.href = '../admin-web/admin.html';
+            targetUrl = '../admin-web/admin.html';
         } else if (role === 'WRITER') {
-            window.location.href = window.location.pathname.includes('seeker-web') ? '../writer-mobile/writer.html' : 'writer.html';
+            targetUrl = window.location.pathname.includes('seeker-web') ? '../writer-mobile/writer.html' : 'writer.html';
         } else {
-            window.location.href = 'dashboard.html';
+            // Seeker/Default
+            targetUrl = 'dashboard.html';
         }
+
+        console.log("✨ Redirecting to:", targetUrl);
+        window.location.href = targetUrl;
     } catch (error) {
         alert("Registration Failed: " + error.message);
         if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = "Create Account"; }

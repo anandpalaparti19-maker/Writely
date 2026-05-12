@@ -36,20 +36,18 @@ service cloud.firestore {
 
     // --- ASSIGNMENTS ---
     match /assignments/{assignmentId} {
-      // Writers can only see basic details for 'POSTED' jobs
-      // Full details are restricted to Seeker and the Active Writer
-      allow read: if isNotSuspended() && (
-        (resource.data.status == 'POSTED' || resource.data.status == 'BIDDING') || 
-        resource.data.seekerId == request.auth.uid || 
-        resource.data.activeWriterId == request.auth.uid
+      // Seekers can always read their own assignments
+      // Writers can see POSTED/BIDDING jobs or their active ones
+      allow read: if request.auth != null && (
+        resource.data.seekerId == request.auth.uid ||
+        resource.data.activeWriterId == request.auth.uid ||
+        (isNotSuspended() && (resource.data.status == 'POSTED' || resource.data.status == 'BIDDING'))
       );
 
       // Only seekers can create assignments
       allow create: if isNotSuspended() && request.resource.data.seekerId == request.auth.uid;
 
       // Restrict field updates:
-      // 1. Seeker can update basic info but NOT activeWriterId/status directly (handled by backend)
-      // 2. Active Writer can only update specific delivery fields
       allow update: if isNotSuspended() && (
         (resource.data.seekerId == request.auth.uid && 
          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['activeWriterId', 'status'])) ||

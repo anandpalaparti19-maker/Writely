@@ -436,6 +436,8 @@ app.post('/api/auth/register', async (req, res) => {
             pincode: (pincode || '').replace(/\D/g, '').slice(0, 6),
             role: role.toUpperCase(),
             emailVerified: false,
+            status: 'ACTIVE',
+            banned: false,
             // Rule 05: Metadata
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),

@@ -1,6 +1,14 @@
+const admin = require('firebase-admin');
+const path = require('path');
+const serviceAccountPath = path.join(process.cwd(), 'gateway', 'api-gateway', 'serviceAccountKey.json');
+const serviceAccount = require(serviceAccountPath);
+
+if (!admin.apps.length) {
+    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+}
 
 async function runProductionTest() {
-    console.log('🧪 Starting Automated Production Integration Test (Corrected URL)...');
+    console.log('🧪 Starting Automated Production Integration Test...');
     
     // Live API URL discovered from logic.js
     const API_BASE = 'https://writely-55q5.onrender.com/api';
@@ -28,7 +36,15 @@ async function runProductionTest() {
         }
         
         console.log('✅ Registration Successful (201 Created)');
-        console.log('✨ Integration Test Passed: The live Render API is active and creating users in Firestore.');
+
+        // --- CLEANUP: Always delete test users so they don't block real registrations ---
+        console.log('🧹 Cleaning up test user from Firebase Auth...');
+        const testUser = await admin.auth().getUserByEmail(testEmail);
+        await admin.auth().deleteUser(testUser.uid);
+        await admin.firestore().collection('users').doc(testUser.uid).delete();
+        console.log('✅ Test user cleaned up successfully.');
+
+        console.log('✨ Integration Test Passed & Cleaned Up.');
         
     } catch (err) {
         console.error('❌ Integration Test Failed:', err.message);

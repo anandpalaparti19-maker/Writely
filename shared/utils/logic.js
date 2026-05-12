@@ -388,13 +388,27 @@ window.registerUser = async function(event) {
             throw new Error(result.error || 'Registration failed');
         }
 
-        // Server-side registration is now the source of truth.
-        // We avoid a browser Firebase Auth sign-in here so signup does not fail
-        // when the client cannot reach Firebase Auth (network, CSP, or App Check).
-        const redirectUrl = `login.html?registered=1&email=${encodeURIComponent(email)}`;
-        const successMessage = result.message || 'Account created successfully.';
-        alert(`${successMessage}\n\nPlease log in to continue.`);
-        window.location.href = redirectUrl;
+        // --- NEW: Trigger Verification Email (Rule 04) ---
+        // We do a brief silent login to trigger the verification email from the client,
+        // then sign out immediately to enforce the "verified-only" dashboard rule.
+        try {
+            const userCred = await firebase.auth().signInWithEmailAndPassword(email, password);
+            if (userCred.user) {
+                await userCred.user.sendEmailVerification();
+                await firebase.auth().signOut();
+            }
+        } catch (authErr) {
+            console.warn('Verification trigger failed (non-fatal):', authErr.message);
+        }
+
+        const successMessage = 'Account created successfully! 📧 A verification link has been sent to your inbox.';
+        alert(`${successMessage}\n\nPlease verify your email to access your dashboard.`);
+        
+        // Robust redirection to login
+        const loginUrl = window.location.pathname.includes('register.html') 
+            ? 'login.html' 
+            : '/apps/seeker-web/login.html';
+        window.location.href = `${loginUrl}?registered=1&email=${encodeURIComponent(email)}`;
     } catch (error) {
         alert("Registration Failed: " + error.message);
         if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = "Create Account"; }

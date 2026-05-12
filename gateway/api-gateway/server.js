@@ -140,6 +140,18 @@ const paymentLimiter = rateLimit({
     message: { error: 'Too many payment attempts.' }
 });
 app.use(generalLimiter);
+ 
+// --- Rule 48: MAINTENANCE MODE ---
+// Can be toggled via env var or a specific flag in Firestore (for immediate effect).
+app.use(async (req, res, next) => {
+    // Check environment variable first
+    if (process.env.MAINTENANCE_MODE === 'true') {
+        return res.status(503).json({ 
+            error: 'Writely is currently undergoing scheduled maintenance. We will be back shortly!' 
+        });
+    }
+    next();
+});
 
 // --- AUTH MIDDLEWARE: verifies Firebase ID tokens ---
 async function requireAuth(req, res, next) {
@@ -150,11 +162,29 @@ async function requireAuth(req, res, next) {
         }
         const idToken = authHeader.substring(7);
         const decoded = await admin.auth().verifyIdToken(idToken);
-        req.user = decoded; // { uid, email, ... }
+        req.user = decoded; // { uid, email, auth_time, ... }
         next();
     } catch (err) {
         return res.status(401).json({ error: 'Invalid or expired token' });
     }
+}
+
+// --- Rule 16: RE-AUTHENTICATION ---
+// Destructive actions require a "fresh" session (re-authenticated in last 5 mins).
+async function requireFreshAuth(req, res, next) {
+    if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+    
+    const now = Math.floor(Date.now() / 1000);
+    const authTime = req.user.auth_time;
+    const freshWindow = 5 * 60; // 5 minutes
+    
+    if (now - authTime > freshWindow) {
+        return res.status(403).json({ 
+            error: 'FRESH_AUTH_REQUIRED', 
+            message: 'For security, this action requires a recent login. Please log out and log back in.' 
+        });
+    }
+    next();
 }
 
 // Health check (public, no auth) — used by Render and uptime monitors
@@ -371,6 +401,62 @@ app.post('/api/payments/cashfree/create-order', paymentLimiter, requireAuth, asy
     }
 });
 
+// --- Rule 22: SERVER-SIDE REGISTRATION ---
+// Previously handled client-side, now moved to server for validation and security.
+app.post('/api/auth/register', async (req, res) => {
+    try {
+        const { email, password, fullName, role, phoneNumber, city, pincode, collegeName } = req.body;
+        
+        // 1. Basic validation
+        if (!email || !password || !fullName || !role) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+        
+        // 2. Password strength (Rule 22 - Server side enforcement)
+        if (password.length < 8) {
+            return res.status(400).json({ error: 'Password must be at least 8 characters' });
+        }
+
+        // 3. Create user in Firebase Auth
+        const userRecord = await admin.auth().createUser({
+            email,
+            password,
+            displayName: fullName,
+        });
+
+        // 4. Store profile in Firestore with Rule 05 Metadata
+        const userData = {
+            uid: userRecord.uid,
+            email: email.toLowerCase(),
+            displayName: fullName,
+            fullName: fullName,
+            collegeName: collegeName || '',
+            phoneNumber: phoneNumber || '',
+            city: (city || '').trim(),
+            cityNormalized: (city || '').trim().toLowerCase(),
+            pincode: (pincode || '').replace(/\D/g, '').slice(0, 6),
+            role: role.toUpperCase(),
+            emailVerified: false,
+            // Rule 05: Metadata
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            createdBy: 'SYSTEM_REGISTRATION',
+            updatedBy: 'SYSTEM_REGISTRATION',
+            metrics: { totalSpent: 0, activeOrders: 0 }
+        };
+
+        await db.collection('users').doc(userRecord.uid).set(userData);
+
+        res.status(201).json({ 
+            message: 'User registered successfully. Please verify your email.',
+            uid: userRecord.uid 
+        });
+    } catch (err) {
+        console.error('Registration error:', err.message);
+        res.status(400).json({ error: err.message });
+    }
+});
+
 /**
  * Idempotently apply a paid Cashfree order to the user's account.
  * - Looks up our `paymentOrders` record (created at /create-order)
@@ -432,7 +518,9 @@ async function applyPaidOrder(orderId, expectedUid = null) {
             t.update(orderRef, {
                 status: 'PROCESSED',
                 processedAt: FieldValue.serverTimestamp(),
-                cfReference: cfOrder.cf_order_id || null
+                cfReference: cfOrder.cf_order_id || null,
+                updatedAt: FieldValue.serverTimestamp(),
+                updatedBy: 'SYSTEM_PAYMENT'
             });
 
             return { kind: 'wallet', amountAdded: amount };
@@ -462,7 +550,9 @@ async function applyPaidOrder(orderId, expectedUid = null) {
             status: 'PROCESSED',
             processedAt: FieldValue.serverTimestamp(),
             expiresAt: admin.firestore.Timestamp.fromDate(endDate),
-            cfReference: cfOrder.cf_order_id || null
+            cfReference: cfOrder.cf_order_id || null,
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedBy: 'SYSTEM_PAYMENT'
         });
 
         return { kind: 'subscription', expiresAt: endDate };
@@ -719,7 +809,7 @@ app.post('/api/assignments', requireAuth, upload.array('attachments', 5), async 
         const cleanPincode = String(pincode || '').replace(/\D/g, '').slice(0, 6);
         const cleanCity = String(city || '').trim().slice(0, 80);
 
-        const docRef = await db.collection('assignments').add({
+        await db.collection('assignments').add({
             title: title.trim(),
             description: description.trim(),
             pages: Number(pages) || 0,
@@ -734,7 +824,11 @@ app.post('/api/assignments', requireAuth, upload.array('attachments', 5), async 
             deadline: deadlineTs,                                // Firestore Timestamp — when seeker needs it by
             collegeName: cleanCollege,                           // visible to writers in feed
             attachments,
-            createdAt: FieldValue.serverTimestamp()
+            // Rule 05: Metadata
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            createdBy: seekerId,
+            updatedBy: seekerId
         });
 
         res.status(201).json({ id: docRef.id, title, status: 'POSTED' });
@@ -854,7 +948,9 @@ app.post('/api/assignments/:id/bid', requireAuth, async (req, res) => {
 
         await assignmentRef.update({
             bids: FieldValue.arrayUnion({ writerId, amount: numAmount, proposal: proposal.trim(), timestamp: new Date() }),
-            status: 'BIDDING'
+            status: 'BIDDING',
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedBy: writerId
         });
 
         // Notify the seeker (fire-and-forget)
@@ -919,14 +1015,18 @@ app.post('/api/assignments/:id/assign', requireAuth, async (req, res) => {
                 status: 'ACTIVE',
                 platformFeePaid: platformFee,
                 totalSeekerPaid: totalAmount,
-                assignedAt: FieldValue.serverTimestamp()
+                assignedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                updatedBy: writerId
             });
 
             t.set(db.collection('messages').doc(), {
                 assignmentId: req.params.id,
                 senderId: writerId,
                 text: "I have started working on your project!",
-                timestamp: FieldValue.serverTimestamp()
+                timestamp: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                updatedBy: writerId
             });
         });
 
@@ -947,7 +1047,7 @@ app.post('/api/assignments/:id/assign', requireAuth, async (req, res) => {
 });
 
 // --- WITHDRAW FUNDS (userId in URL MUST match authenticated user) ---
-app.post('/api/wallets/:userId/withdraw', requireAuth, async (req, res) => {
+app.post('/api/wallets/:userId/withdraw', requireAuth, requireFreshAuth, async (req, res) => {
     try {
         const { userId } = req.params;
         // CRITICAL: prevent draining other users' wallets
@@ -963,7 +1063,11 @@ app.post('/api/wallets/:userId/withdraw', requireAuth, async (req, res) => {
             const balance = walletSnap.data().balance || 0;
             if (balance <= 0) throw new Error("Insufficient funds for withdrawal");
 
-            t.update(walletRef, { balance: 0 });
+            t.update(walletRef, { 
+                balance: 0,
+                updatedAt: FieldValue.serverTimestamp(),
+                updatedBy: req.user.uid
+            });
             
             t.set(db.collection('transactions').doc(), {
                 receiverId: userId,
@@ -1024,7 +1128,9 @@ app.post('/api/assignments/:id/submit', requireAuth, upload.single('solution'), 
 
         await assignmentRef.update({
             solution: solutionData,
-            status: 'REVIEW'
+            status: 'REVIEW',
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedBy: req.user.uid
         });
 
         // Notify seeker that work was delivered
@@ -1131,7 +1237,9 @@ app.post('/api/assignments/:id/dispute', requireAuth, async (req, res) => {
         await assignmentRef.update({ 
             status: 'DISPUTED',
             disputeReason: reason,
-            disputedAt: FieldValue.serverTimestamp()
+            disputedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedBy: req.user.uid
         });
 
         // Log for Admin Dashboard
@@ -1139,7 +1247,8 @@ app.post('/api/assignments/:id/dispute', requireAuth, async (req, res) => {
             service: 'DISPUTE',
             description: `⚠️ Dispute on #${req.params.id}: ${reason}`,
             status: 'WARNING',
-            time: 'Just now'
+            time: 'Just now',
+            timestamp: FieldValue.serverTimestamp()
         });
 
         // Notify the OTHER party about the dispute
@@ -1190,7 +1299,9 @@ app.post('/api/assignments/:id/negotiate', requireAuth, async (req, res) => {
         };
 
         await assignmentRef.update({
-            disputeProposal: proposal
+            disputeProposal: proposal,
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedBy: req.user.uid
         });
 
         const isSeeker = req.user.uid === asn.seekerId;
@@ -1230,11 +1341,21 @@ app.post('/api/assignments/:id/accept-negotiation', requireAuth, async (req, res
             // Apply payouts
             if (writerPayout > 0 && asn.activeWriterId) {
                 const writerWallet = db.collection('wallets').doc(asn.activeWriterId);
-                t.set(writerWallet, { userId: asn.activeWriterId, balance: FieldValue.increment(writerPayout) }, { merge: true });
+                t.set(writerWallet, { 
+                    userId: asn.activeWriterId, 
+                    balance: FieldValue.increment(writerPayout),
+                    updatedAt: FieldValue.serverTimestamp(),
+                    updatedBy: 'SYSTEM_DISPUTE'
+                }, { merge: true });
             }
             if (seekerRefund > 0) {
                 const seekerWallet = db.collection('wallets').doc(asn.seekerId);
-                t.set(seekerWallet, { userId: asn.seekerId, balance: FieldValue.increment(seekerRefund) }, { merge: true });
+                t.set(seekerWallet, { 
+                    userId: asn.seekerId, 
+                    balance: FieldValue.increment(seekerRefund),
+                    updatedAt: FieldValue.serverTimestamp(),
+                    updatedBy: 'SYSTEM_DISPUTE'
+                }, { merge: true });
             }
 
             t.update(assignmentRef, {
@@ -1242,7 +1363,9 @@ app.post('/api/assignments/:id/accept-negotiation', requireAuth, async (req, res
                 disputeResolution: 'SELF_NEGOTIATED',
                 disputeWriterShare: share,
                 disputeResolvedAt: FieldValue.serverTimestamp(),
-                disputeProposal: null
+                disputeProposal: null,
+                updatedAt: FieldValue.serverTimestamp(),
+                updatedBy: req.user.uid
             });
 
             return { writerId: asn.activeWriterId, seekerId: asn.seekerId, writerPayout, seekerRefund };
@@ -1290,7 +1413,9 @@ app.post('/api/assignments/:id/messages', requireAuth, async (req, res) => {
             assignmentId: req.params.id,
             senderId: req.user.uid,
             text: trimmed,
-            timestamp: FieldValue.serverTimestamp()
+            timestamp: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedBy: req.user.uid
         });
 
         // Notify the other party (only if a writer is actively assigned)
@@ -1372,7 +1497,9 @@ app.post('/api/assignments/:id/review', requireAuth, async (req, res) => {
                 reviewerRole: isSeeker ? 'SEEKER' : 'WRITER',
                 rating: numRating,
                 comment: cleanComment,
-                createdAt: FieldValue.serverTimestamp()
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                updatedBy: reviewerId
             });
 
             t.set(userRef, {
@@ -1380,7 +1507,9 @@ app.post('/api/assignments/:id/review', requireAuth, async (req, res) => {
                     ...(cur.metrics || {}),
                     avgRating: Math.round(newAvg * 100) / 100,
                     reviewCount: newCount
-                }
+                },
+                updatedAt: FieldValue.serverTimestamp(),
+                updatedBy: reviewerId
             }, { merge: true });
 
             return { revieweeId, newAvg, newCount };
@@ -1410,6 +1539,24 @@ app.post('/api/assignments/:id/review', requireAuth, async (req, res) => {
 app.post('/api/support/chat', aiLimiter, requireAuth, async (req, res) => {
     try {
         const { message, history = [] } = req.body;
+        
+        // --- Rule 27: LLM Token Capping ---
+        const userRef = db.collection('users').doc(req.user.uid);
+        const userSnap = await userRef.get();
+        const userData = userSnap.data() || {};
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        
+        let tokenUsage = userData.tokenUsage || {};
+        if (tokenUsage.date !== today) {
+            tokenUsage = { date: today, count: 0 };
+        }
+        
+        const DAILY_TOKEN_LIMIT = 5000; // Sane limit for free tier
+        if (tokenUsage.count > DAILY_TOKEN_LIMIT) {
+            return res.status(429).json({ 
+                error: 'Daily AI usage limit reached. Please try again tomorrow or upgrade your plan.' 
+            });
+        }
         
         const systemPrompt = `
             You are the "Writely Concierge", a premium AI support assistant for Writely, an academic marketplace.
@@ -1467,6 +1614,15 @@ app.post('/api/support/chat', aiLimiter, requireAuth, async (req, res) => {
             system: systemPrompt + (needsHuman ? "\nThe user seems frustrated or wants a person. Reassure them and mention that an admin has been alerted." : ""),
             prompt: message,
             messages: messages
+        });
+
+        // Update token usage (rough estimate: 1 word ≈ 1.3 tokens)
+        const estimatedTokens = Math.round((message.split(' ').length + response.text.split(' ').length) * 1.3);
+        await userRef.update({
+            'tokenUsage.date': today,
+            'tokenUsage.count': FieldValue.increment(estimatedTokens),
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedBy: 'SYSTEM_AI'
         });
 
         res.json({ text: response.text });
@@ -1641,7 +1797,9 @@ app.post('/api/admin/disputes/:id/resolve', requireAuth, requireAdmin, async (re
                 disputeWriterShare: share,
                 disputeResolvedAt: FieldValue.serverTimestamp(),
                 disputeResolvedBy: req.user.uid,
-                disputeNote: String(note || aiNote).substring(0, 1000)
+                disputeNote: String(note || aiNote).substring(0, 1000),
+                updatedAt: FieldValue.serverTimestamp(),
+                updatedBy: req.user.uid
             });
 
             return { writerId: asn.activeWriterId, seekerId: asn.seekerId, writerPayout, seekerRefund, title: asn.title, share };
@@ -1685,12 +1843,13 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
     try {
         const limit = Math.min(Number(req.query.limit) || 50, 100);
         const search = String(req.query.search || '').trim().toLowerCase();
-        const snap = await db.collection('users').limit(500).get();
+        const snap = await db.collection('users').where('status', '!=', 'DELETED').limit(500).get();
         let users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         if (search) {
             users = users.filter(u =>
                 (u.email || '').toLowerCase().includes(search) ||
-                (u.name || '').toLowerCase().includes(search) ||
+                (u.fullName || '').toLowerCase().includes(search) ||
+                (u.displayName || '').toLowerCase().includes(search) ||
                 (u.cityNormalized || '').includes(search)
             );
         }
@@ -1720,7 +1879,9 @@ app.post('/api/admin/users/:uid/ban', requireAuth, requireAdmin, async (req, res
         await db.collection('users').doc(req.params.uid).set({
             banned, bannedReason: banned ? reason : null,
             bannedAt: banned ? FieldValue.serverTimestamp() : null,
-            bannedBy: banned ? req.user.uid : null
+            bannedBy: banned ? req.user.uid : null,
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedBy: req.user.uid
         }, { merge: true });
 
         // Revoke active sessions when banning
@@ -1730,15 +1891,62 @@ app.post('/api/admin/users/:uid/ban', requireAuth, requireAdmin, async (req, res
 
         await db.collection('events').add({
             service: 'ADMIN',
-            description: `${banned ? 'BANNED' : 'UNBANNED'} user ${req.params.uid} by ${req.user.uid}${reason ? ' — ' + reason : ''}`,
+            type: banned ? 'USER_BAN' : 'USER_UNBAN',
+            description: `${banned ? 'Banned' : 'Unbanned'} user ${req.params.uid}. Reason: ${reason}`,
             status: banned ? 'WARNING' : 'INFO',
-            timestamp: FieldValue.serverTimestamp()
+            timestamp: FieldValue.serverTimestamp(),
+            updatedBy: req.user.uid
         });
 
         res.json({ uid: req.params.uid, banned });
     } catch (err) {
         console.error('Ban user error:', err.message);
         res.status(500).json({ error: 'Could not update user' });
+    }
+});
+
+// --- Rule 45 & 02: SECURE ACCOUNT DELETION (Soft Delete) ---
+// Users can request to delete their account. We don't hard-delete 
+// immediately to preserve financial/audit records, but we mark it 
+// and revoke all access.
+app.post('/api/user/delete-account', requireAuth, requireFreshAuth, async (req, res) => {
+    try {
+        const uid = req.user.uid;
+        
+        // 1. Mark as deleted in Firestore (Soft Delete - Rule 02)
+        await db.collection('users').doc(uid).update({
+            deletedAt: FieldValue.serverTimestamp(),
+            status: 'DELETED',
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedBy: uid,
+            // Anonymize sensitive fields to comply with GDPR/Privacy (Rule 45)
+            email: `deleted_${uid}@writely.internal`,
+            fullName: 'Deleted User',
+            displayName: 'Deleted User',
+            phoneNumber: null,
+            city: null,
+            cityNormalized: null,
+            pincode: null,
+            collegeName: null
+        });
+
+        // 2. Revoke all active sessions (Rule 45)
+        await admin.auth().revokeRefreshTokens(uid);
+        
+        // 3. Optional: Disable the user in Firebase Auth
+        await admin.auth().updateUser(uid, { disabled: true });
+
+        await db.collection('events').add({
+            service: 'USER',
+            description: `🗑️ Account deletion requested and processed for ${uid}`,
+            status: 'INFO',
+            timestamp: FieldValue.serverTimestamp()
+        });
+
+        res.json({ message: 'Account has been successfully deleted and sessions revoked.' });
+    } catch (err) {
+        console.error('Account deletion error:', err.message);
+        res.status(500).json({ error: 'Could not delete account' });
     }
 });
 

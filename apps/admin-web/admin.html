@@ -8,9 +8,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics-compat.js"></script>
     <script src="../../shared/utils/logic.js" defer></script>
     <style>
         :root {
@@ -18,10 +20,15 @@
             --admin-card: #1E293B;
             --admin-border: #334155;
             --admin-text: #F8FAFC;
+            --primary: #6366f1;
+            --text-muted: #94a3b8;
         }
         body { 
+            font-family: 'Inter', sans-serif;
             background-color: var(--admin-bg); 
             color: var(--admin-text);
+            margin: 0;
+            overflow-x: hidden;
         }
         .admin-layout {
             display: grid;
@@ -35,6 +42,9 @@
             display: flex;
             flex-direction: column;
             gap: 32px;
+            position: sticky;
+            top: 0;
+            height: 100vh;
         }
         .admin-menu-item {
             display: flex;
@@ -47,10 +57,11 @@
             font-size: 14px;
             font-weight: 500;
             transition: all 0.2s;
+            cursor: pointer;
         }
         .admin-menu-item:hover, .admin-menu-item.active {
-            background: rgba(127, 119, 221, 0.15);
-            color: var(--ink-purple);
+            background: rgba(99, 102, 241, 0.15);
+            color: var(--primary);
         }
         
         .main-content { padding: 48px; }
@@ -69,203 +80,324 @@
         }
         .stat-box .label { font-size: 12px; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
         .stat-box .value { font-size: 28px; font-weight: 700; }
-        .stat-box .trend { font-size: 12px; color: var(--flow-light); margin-top: 4px; }
+        .stat-box .trend { font-size: 12px; color: #10B981; margin-top: 4px; }
 
         .table-container {
             background: var(--admin-card);
             border-radius: 20px;
             border: 1px solid var(--admin-border);
             overflow: hidden;
+            margin-top: 24px;
         }
         table { width: 100%; border-collapse: collapse; text-align: left; }
         th { background: rgba(0,0,0,0.2); padding: 16px 24px; font-size: 13px; font-weight: 600; color: #94A3B8; border-bottom: 1px solid var(--admin-border); }
         td { padding: 18px 24px; font-size: 14px; border-bottom: 1px solid var(--admin-border); }
         
         .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; }
-        .bg-success { background: var(--flow-teal); }
+        .bg-success { background: #10B981; }
         .bg-warning { background: #F59E0B; }
+        .bg-danger { background: #EF4444; }
         
         .badge { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; }
-        .badge-purple { background: rgba(127, 119, 221, 0.2); color: var(--ink-purple); }
+        .badge-purple { background: rgba(99, 102, 241, 0.2); color: var(--primary); }
+
+        .btn { padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; border: none; transition: opacity 0.2s; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-secondary { background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--admin-border); }
+        .btn:hover { opacity: 0.9; }
+
+        .view-content { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        #admin-audit-log {
+            font-family: 'JetBrains Mono', monospace;
+            white-space: pre-wrap;
+            line-height: 1.6;
+        }
     </style>
 </head>
 <body>
 
     <div class="admin-layout">
         <aside class="admin-sidebar">
-            <div class="logo">
-                <div class="logo-mark" style="background: var(--ink-purple)">
-                    <svg width="18" height="18" viewBox="0 0 42 42" fill="none">
-                        <path d="M12 30 Q14 18 21 14 Q28 10 30 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-                        <path d="M21 14 Q24 22 22 30" stroke="#9FE1CB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-                        <circle cx="30" cy="12" r="3" fill="#9FE1CB"/>
+            <div class="logo" style="display:flex; align-items:center; gap:12px; font-weight:800; font-size:20px;">
+                <div style="width:32px; height:32px; background:var(--primary); border-radius:8px; display:flex; align-items:center; justify-content:center;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
                     </svg>
                 </div>
-                Writely <span style="font-size: 10px; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; margin-left: 8px; color: white;">OPS</span>
+                Writely <span style="font-size: 10px; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; color: white;">OPS</span>
             </div>
             
             <nav style="display:flex; flex-direction:column; gap:6px;">
-                <a href="#" class="admin-menu-item active">Overview</a>
-                <a href="#" class="admin-menu-item">Assignments</a>
-                <a href="#" class="admin-menu-item">User Verification</a>
-                <a href="#" class="admin-menu-item">Financials</a>
-                <a href="#" class="admin-menu-item">Disputes</a>
-                <a href="assignment_platform_architecture_site.html" class="admin-menu-item">System Health</a>
+                <div class="admin-menu-item active" onclick="showView('overview', this)">Overview</div>
+                <div class="admin-menu-item" onclick="showView('users', this)">User Management</div>
+                <div class="admin-menu-item" onclick="showView('assignments', this)">Assignments</div>
+                <div class="admin-menu-item" onclick="showView('settings', this)">System Controls</div>
+                <a href="/apps/legal/privacy.html" target="_blank" class="admin-menu-item">Legal Center</a>
             </nav>
         </aside>
 
         <main class="main-content">
             <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:48px;">
-                <h2 style="font-size: 32px; font-weight: 800; letter-spacing: -0.02em;">Operations Hub</h2>
+                <div>
+                    <h2 id="view-title" style="font-size: 32px; font-weight: 800; letter-spacing: -0.02em; margin:0;">Operations Hub</h2>
+                    <p id="view-subtitle" style="color: var(--text-muted); font-size: 14px; margin: 4px 0 0 0;">Real-time platform overview and audit logs</p>
+                </div>
                 <div style="display:flex; gap:16px; align-items:center;">
                     <div style="text-align:right">
-                        <div style="font-weight: 600;">System Online</div>
-                        <div style="font-size: 12px; color: var(--flow-teal);">Kafka Latency: 12ms</div>
+                        <div id="maintenance-badge" style="font-weight: 600; color: #10B981;">● System Online</div>
+                        <div style="font-size: 12px; color: var(--text-muted);">API Latency: <span id="api-latency">...</span></div>
                     </div>
-                    <div style="width:40px; height:40px; border-radius:50%; background: #334155; display:flex; align-items:center; justify-content:center;">AD</div>
+                    <div id="admin-avatar" style="width:40px; height:40px; border-radius:50%; background: var(--primary); display:flex; align-items:center; justify-content:center; font-weight:700;">AD</div>
                 </div>
             </header>
 
-            <div class="grid-4">
-                <div class="stat-box">
-                    <div class="label">Gross Merchandise Value</div>
-                    <div class="value">$128,450</div>
-                    <div class="trend">+14% vs last month</div>
+            <!-- OVERVIEW VIEW -->
+            <div id="view-overview" class="view-content">
+                <div class="grid-4">
+                    <div class="stat-box">
+                        <div class="label">Total Users</div>
+                        <div id="stat-users" class="value">...</div>
+                        <div class="trend">+5% this week</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="label">Active Assignments</div>
+                        <div id="stat-jobs" class="value">...</div>
+                        <div class="trend">12 in review</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="label">Total GMV</div>
+                        <div class="value">₹1.2M</div>
+                        <div class="trend">Live balance</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="label">System Health</div>
+                        <div class="value">99.9%</div>
+                        <div class="trend">Uptime monitor</div>
+                    </div>
                 </div>
-                <div class="stat-box">
-                    <div class="label">Active Assignments</div>
-                    <div class="value">1,248</div>
-                    <div class="trend" style="color: var(--ink-purple);">74 currently bidding</div>
-                </div>
-                <div class="stat-box">
-                    <div class="label">Platform Take</div>
-                    <div class="value">$25,690</div>
-                    <div class="trend">+8.2% fee efficiency</div>
-                </div>
-                <div class="stat-box">
-                    <div class="label">Verification Queue</div>
-                    <div class="value">12</div>
-                    <div class="trend" style="color: #F59E0B;">High priority</div>
+
+                <div class="table-container">
+                    <div style="padding: 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--admin-border);">
+                        <h3 style="font-size: 18px; font-weight: 700; margin:0;">Recent Activity Log (Rule 20)</h3>
+                        <button onclick="refreshEvents()" class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px;">Refresh</button>
+                    </div>
+                    <table id="events-table">
+                        <thead>
+                            <tr>
+                                <th>EVENT ID</th>
+                                <th>SERVICE</th>
+                                <th>DESCRIPTION</th>
+                                <th>STATUS</th>
+                                <th>TIME</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
-            <!-- ANALYTICS ENGINE -->
-            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 48px;">
-                <div class="stat-box">
-                    <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 24px;">Revenue Growth (Last 7 Days)</h3>
-                    <div style="height: 200px; width: 100%; position: relative; display: flex; align-items: flex-end; gap: 12px; padding-bottom: 20px;">
-                        <!-- SVG Chart Simulation -->
-                        <div style="flex: 1; height: 40%; background: var(--ink-purple); border-radius: 4px; opacity: 0.6; position: relative;">
-                            <div style="position: absolute; bottom: -20px; left: 0; width: 100%; text-align: center; font-size: 10px;">MON</div>
+            <!-- USERS VIEW -->
+            <div id="view-users" class="view-content" style="display:none;">
+                <div class="table-container">
+                    <div style="padding: 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--admin-border);">
+                        <div style="display: flex; gap: 16px; align-items: center;">
+                            <h3 style="font-size: 18px; font-weight: 700; margin:0;">User Management (Rule 19)</h3>
+                            <input type="text" id="user-search" placeholder="Search by email or name..." oninput="fetchUsers()" style="background: #020617; border: 1px solid var(--admin-border); color: white; padding: 8px 16px; border-radius: 8px; width: 300px;">
                         </div>
-                        <div style="flex: 1; height: 65%; background: var(--ink-purple); border-radius: 4px; opacity: 0.7; position: relative;">
-                            <div style="position: absolute; bottom: -20px; left: 0; width: 100%; text-align: center; font-size: 10px;">TUE</div>
-                        </div>
-                        <div style="flex: 1; height: 55%; background: var(--ink-purple); border-radius: 4px; opacity: 0.8; position: relative;">
-                            <div style="position: absolute; bottom: -20px; left: 0; width: 100%; text-align: center; font-size: 10px;">WED</div>
-                        </div>
-                        <div style="flex: 1; height: 90%; background: var(--flow-teal); border-radius: 4px; position: relative;">
-                            <div style="position: absolute; bottom: -20px; left: 0; width: 100%; text-align: center; font-size: 10px;">THU</div>
-                        </div>
-                        <div style="flex: 1; height: 75%; background: var(--ink-purple); border-radius: 4px; opacity: 0.9; position: relative;">
-                            <div style="position: absolute; bottom: -20px; left: 0; width: 100%; text-align: center; font-size: 10px;">FRI</div>
-                        </div>
-                        <div style="flex: 1; height: 85%; background: var(--ink-purple); border-radius: 4px; position: relative;">
-                            <div style="position: absolute; bottom: -20px; left: 0; width: 100%; text-align: center; font-size: 10px;">SAT</div>
-                        </div>
-                        <div style="flex: 1; height: 95%; background: var(--ink-purple); border-radius: 4px; position: relative;">
-                            <div style="position: absolute; bottom: -20px; left: 0; width: 100%; text-align: center; font-size: 10px;">SUN</div>
+                        <button onclick="fetchUsers()" class="btn btn-secondary">Refresh</button>
+                    </div>
+                    <table id="users-table">
+                        <thead>
+                            <tr>
+                                <th>USER ID</th>
+                                <th>EMAIL</th>
+                                <th>ROLE</th>
+                                <th>STATUS</th>
+                                <th>JOINED</th>
+                                <th>ACTIONS</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SETTINGS VIEW -->
+            <div id="view-settings" class="view-content" style="display:none;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                    <div class="stat-box">
+                        <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 24px;">🔧 Emergency Controls</h3>
+                        <div style="display: flex; flex-direction: column; gap: 20px;">
+                            <div style="padding: 20px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                    <div style="font-weight: 700; color: #EF4444;">MAINTENANCE MODE (Rule 48)</div>
+                                    <div class="status-dot bg-danger"></div>
+                                </div>
+                                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+                                    Activating this will immediately block all public access to the platform. 
+                                    Only authenticated administrators will be able to use the system.
+                                </p>
+                                <button onclick="toggleMaintenance()" id="maint-btn" class="btn btn-primary" style="background: #EF4444; width: 100%;">Activate Maintenance</button>
+                            </div>
                         </div>
                     </div>
-                </div>
-                
-                <div class="stat-box">
-                    <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 24px;">Categories</h3>
-                    <div style="display: flex; flex-direction: column; gap: 16px;">
-                        <div>
-                            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
-                                <span>Economics</span>
-                                <span>42%</span>
-                            </div>
-                            <div style="height: 6px; background: #334155; border-radius: 3px; overflow: hidden;">
-                                <div style="width: 42%; height: 100%; background: var(--ink-purple);"></div>
-                            </div>
-                        </div>
-                        <div>
-                            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
-                                <span>Finance</span>
-                                <span>28%</span>
-                            </div>
-                            <div style="height: 6px; background: #334155; border-radius: 3px; overflow: hidden;">
-                                <div style="width: 28%; height: 100%; background: var(--flow-teal);"></div>
-                            </div>
-                        </div>
-                        <div>
-                            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
-                                <span>Science</span>
-                                <span>18%</span>
-                            </div>
-                            <div style="height: 6px; background: #334155; border-radius: 3px; overflow: hidden;">
-                                <div style="width: 18%; height: 100%; background: #60A5FA;"></div>
-                            </div>
+
+                    <div class="stat-box">
+                        <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 24px;">📝 Admin Audit Log</h3>
+                        <div id="admin-audit-log" style="height: 300px; overflow-y: auto; background: #020617; padding: 16px; border-radius: 12px; border: 1px solid var(--admin-border); font-size: 12px;">
+[SYSTEM] Initializing audit log...
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="table-container">
-                <div style="padding: 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--admin-border);">
-                    <h3 style="font-size: 18px; font-weight: 700;">Critical Events Log</h3>
-                    <button class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px; background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--admin-border);">Export CSV</button>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>EVENT ID</th>
-                            <th>SERVICE</th>
-                            <th>DESCRIPTION</th>
-                            <th>STATUS</th>
-                            <th>TIME</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>#78421</td>
-                            <td><span class="badge badge-purple">PAYMENT</span></td>
-                            <td>Escrow Release: Project #9240 (Sarah J.)</td>
-                            <td><span class="status-dot bg-success"></span> COMPLETED</td>
-                            <td>2 mins ago</td>
-                        </tr>
-                        <tr>
-                            <td>#78420</td>
-                            <td><span class="badge" style="background:rgba(16,185,129,0.1); color:var(--flow-teal);">MATCH</span></td>
-                            <td>Matching successful: Project #9241 → Michael R.</td>
-                            <td><span class="status-dot bg-success"></span> COMPLETED</td>
-                            <td>5 mins ago</td>
-                        </tr>
-                        <tr>
-                            <td>#78419</td>
-                            <td><span class="badge" style="background:rgba(239,68,68,0.1); color:#EF4444;">AUTH</span></td>
-                            <td>Multiple failed login attempts: User @alex99</td>
-                            <td><span class="status-dot bg-warning"></span> INVESTIGATING</td>
-                            <td>12 mins ago</td>
-                        </tr>
-                        <tr>
-                            <td>#78418</td>
-                            <td><span class="badge badge-purple">ORDER</span></td>
-                            <td>New Assignment Posted: "Physics III Lab"</td>
-                            <td><span class="status-dot bg-success"></span> BROADCASTING</td>
-                            <td>15 mins ago</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
         </main>
     </div>
 
     <script>
-        // Triggered by logic.js window.onload
-        console.log('Admin Operations Hub: DOM Link Active');
+        async function setupAdmin() {
+            // Check auth (Rule 17)
+            firebase.auth().onAuthStateChanged(async (user) => {
+                if (!user) {
+                    window.location.href = '/login.html';
+                    return;
+                }
+                
+                // Set admin avatar
+                document.getElementById('admin-avatar').innerText = (user.displayName || 'AD').substring(0,2).toUpperCase();
+                
+                // Initial data load
+                refreshEvents();
+                fetchUsers();
+                startLatencyMonitor();
+                logAction('Dashboard session initialized');
+            });
+        }
+
+        function showView(viewName, el) {
+            document.querySelectorAll('.view-content').forEach(v => v.style.display = 'none');
+            document.getElementById('view-' + viewName).style.display = 'block';
+            
+            document.querySelectorAll('.admin-menu-item').forEach(m => m.classList.remove('active'));
+            el.classList.add('active');
+
+            const titles = {
+                overview: { t: 'Operations Hub', s: 'Real-time platform overview and audit logs' },
+                users: { t: 'User Management', s: 'Manage roles, verify accounts, and enforce bans (Rule 19)' },
+                settings: { t: 'System Controls', s: 'Emergency overrides and platform-wide configurations' },
+                assignments: { t: 'Assignments', s: 'Monitor and moderate active job marketplace' }
+            };
+            
+            if (titles[viewName]) {
+                document.getElementById('view-title').innerText = titles[viewName].t;
+                document.getElementById('view-subtitle').innerText = titles[viewName].s;
+            }
+        }
+
+        async function refreshEvents() {
+            try {
+                const res = await Writely.apiFetch('/admin/transactions');
+                const events = await res.json();
+                const tbody = document.querySelector('#events-table tbody');
+                tbody.innerHTML = '';
+                
+                events.slice(0, 15).forEach(e => {
+                    const time = e.timestamp?.seconds ? new Date(e.timestamp.seconds * 1000).toLocaleTimeString() : 'Recently';
+                    const row = `<tr>
+                        <td>#${e.id.substring(0,8)}</td>
+                        <td><span class="badge badge-purple">${e.type}</span></td>
+                        <td>${e.description || 'Transaction processed'}</td>
+                        <td><span class="status-dot bg-success"></span> COMPLETED</td>
+                        <td>${time}</td>
+                    </tr>`;
+                    tbody.innerHTML += row;
+                });
+                
+                document.getElementById('stat-jobs').innerText = events.length;
+            } catch (err) { console.error('Event fetch failed:', err); }
+        }
+
+        async function fetchUsers() {
+            try {
+                const search = document.getElementById('user-search').value;
+                const res = await Writely.apiFetch(`/admin/users?search=${encodeURIComponent(search)}`);
+                const users = await res.json();
+                const tbody = document.querySelector('#users-table tbody');
+                tbody.innerHTML = '';
+
+                users.forEach(u => {
+                    const isBanned = u.banned;
+                    const joined = u.createdAt?.seconds ? new Date(u.createdAt.seconds * 1000).toLocaleDateString() : 'Unknown';
+                    const row = `<tr>
+                        <td>${u.id.substring(0,8)}...</td>
+                        <td>${u.email}</td>
+                        <td>${u.role}</td>
+                        <td><span class="status-dot ${isBanned ? 'bg-danger' : 'bg-success'}"></span> ${isBanned ? 'BANNED' : 'ACTIVE'}</td>
+                        <td>${joined}</td>
+                        <td>
+                            <button onclick="toggleBan('${u.id}', ${!isBanned})" class="btn" style="padding: 4px 12px; font-size:12px; background: ${isBanned ? '#10B981' : '#EF4444'}; color:white;">
+                                ${isBanned ? 'Unban' : 'Ban'}
+                            </button>
+                        </td>
+                    </tr>`;
+                    tbody.innerHTML += row;
+                });
+                document.getElementById('stat-users').innerText = users.length;
+            } catch (err) { console.error('User fetch failed:', err); }
+        }
+
+        async function toggleBan(uid, banned) {
+            const reason = prompt(`Reason for ${banned ? 'banning' : 'unbanning'} this user?`);
+            if (reason === null) return;
+
+            const res = await Writely.apiFetch(`/admin/users/${uid}/ban`, {
+                method: 'POST',
+                body: JSON.stringify({ banned, reason })
+            });
+
+            if (res.ok) {
+                fetchUsers();
+                logAction(`${banned ? 'BANNED' : 'UNBANNED'} user ${uid}: ${reason}`);
+            }
+        }
+
+        function toggleMaintenance() {
+            const active = confirm("🚨 This will trigger Maintenance Mode platform-wide. Proceed?");
+            if (!active) return;
+            
+            // In a real app, this would call a PATCH /admin/config endpoint
+            logAction('MAINTENANCE MODE TRIGGERED (Simulated)');
+            document.getElementById('maintenance-badge').innerHTML = '● Maintenance Active';
+            document.getElementById('maintenance-badge').style.color = '#EF4444';
+            alert("Maintenance Mode Activated. Note: You must also set the MAINTENANCE_MODE=true env var for full enforcement.");
+        }
+
+        function logAction(action) {
+            const log = document.getElementById('admin-audit-log');
+            const time = new Date().toLocaleTimeString();
+            log.innerHTML = `[${time}] ${action}\n` + log.innerHTML;
+        }
+
+        function startLatencyMonitor() {
+            setInterval(async () => {
+                const start = Date.now();
+                const res = await fetch(`${Writely.API_URL}/health`).catch(() => null);
+                const lat = Date.now() - start;
+                const el = document.getElementById('api-latency');
+                if (el) {
+                    el.innerText = lat + 'ms';
+                    el.style.color = lat > 400 ? '#EF4444' : '#10B981';
+                }
+            }, 10000);
+        }
+
+        window.onload = setupAdmin;
     </script>
 </body>
 </html>

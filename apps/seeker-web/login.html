@@ -50,6 +50,7 @@
             <div class="logo-mark">W</div>
             Writely
         </a>
+        <div id="registrationNotice" style="display:none; margin-bottom:20px; padding:14px 16px; border-radius:12px; background:var(--ink-tint); color:var(--ink-purple); font-size:14px; font-weight:600; text-align:left;"></div>
         <h2 style="margin-bottom:8px; font-weight:800;">Welcome back</h2>
         <p style="color:var(--text-secondary); font-size:14px; margin-bottom:32px;">Enter your credentials to access your dashboard.</p>
         
@@ -73,6 +74,16 @@
         </p>
     </div>
     <script>
+        const loginParams = new URLSearchParams(window.location.search);
+        const registrationNotice = document.getElementById('registrationNotice');
+        if (loginParams.get('registered') === '1' && registrationNotice) {
+            const email = loginParams.get('email');
+            registrationNotice.style.display = 'block';
+            registrationNotice.textContent = email
+                ? `Account created for ${email}. Sign in to continue.`
+                : 'Account created successfully. Sign in to continue.';
+        }
+
         async function sendPasswordReset(e) {
             if (e) e.preventDefault();
             const emailEl = document.getElementById('email');

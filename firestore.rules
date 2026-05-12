@@ -1,7 +1,14 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
+    // --- Rule 19 & 02: SUSPENSION CHECK ---
+    // Blocks any user who is banned or has soft-deleted their account.
+    function isNotSuspended() {
+      return request.auth != null && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.banned != true &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status != 'DELETED';
+    }
+
     // --- USER PROFILES ---
     match /users/{userId} {
       // FIX #5: Users can ONLY read their own profile.
@@ -9,10 +16,10 @@ service cloud.firestore {
       // read ANY other user's document (exposing phone, city, pincode, role, etc.).
       // Writer/seeker public profile data (avgRating, displayName) must be fetched
       // via the backend API which exposes only safe, curated fields.
-      allow read: if request.auth != null && request.auth.uid == userId;
+      allow read: if isNotSuspended() && request.auth.uid == userId;
       allow create: if request.auth != null && request.auth.uid == userId;
       // Users CANNOT modify their own subscription/wallet status — backend only
-      allow update: if request.auth != null && request.auth.uid == userId
+      allow update: if isNotSuspended() && request.auth.uid == userId
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['subscription', 'writerSubscription', 'role', 'metrics']);
 
 
@@ -31,19 +38,19 @@ service cloud.firestore {
     match /assignments/{assignmentId} {
       // Writers can only see basic details for 'POSTED' jobs
       // Full details are restricted to Seeker and the Active Writer
-      allow read: if request.auth != null && (
+      allow read: if isNotSuspended() && (
         (resource.data.status == 'POSTED' || resource.data.status == 'BIDDING') || 
         resource.data.seekerId == request.auth.uid || 
         resource.data.activeWriterId == request.auth.uid
       );
 
       // Only seekers can create assignments
-      allow create: if request.auth != null && request.resource.data.seekerId == request.auth.uid;
+      allow create: if isNotSuspended() && request.resource.data.seekerId == request.auth.uid;
 
       // Restrict field updates:
       // 1. Seeker can update basic info but NOT activeWriterId/status directly (handled by backend)
       // 2. Active Writer can only update specific delivery fields
-      allow update: if request.auth != null && (
+      allow update: if isNotSuspended() && (
         (resource.data.seekerId == request.auth.uid && 
          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['activeWriterId', 'status'])) ||
         (resource.data.activeWriterId == request.auth.uid && 
@@ -64,10 +71,14 @@ service cloud.firestore {
 
     // --- MESSAGES ---
     match /messages/{messageId} {
-      // Allow authenticated users to read messages.
-      // (Using get() here caused onSnapshot realtime listener to fail due to limitations)
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && request.resource.data.senderId == request.auth.uid;
+      // FIX #14: Only participants of the assignment can read messages.
+      // We use get() to fetch the parent assignment and verify the caller is either 
+      // the seeker or the active writer.
+      allow read: if isNotSuspended() && (
+        get(/databases/$(database)/documents/assignments/$(resource.data.assignmentId)).data.seekerId == request.auth.uid ||
+        get(/databases/$(database)/documents/assignments/$(resource.data.assignmentId)).data.activeWriterId == request.auth.uid
+      );
+      allow create: if isNotSuspended() && request.resource.data.senderId == request.auth.uid;
     }
 
     // --- TRANSACTIONS & WALLETS ---

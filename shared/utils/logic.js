@@ -55,7 +55,7 @@ try {
             return;
         }
         firebase.appCheck().activate(
-            new firebase.appCheck.ReCaptchaV3Provider(RECAPTCHA_SITE_KEY),
+            new firebase.appCheck.ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY),
             true // auto-refresh token
         );
         console.log('🛡️ App Check activated');
@@ -91,6 +91,29 @@ const Writely = {
         this.checkPaymentReturn();
     },
 
+    // --- Rule 45: Account Deletion Helper ---
+    deleteAccount: async function() {
+        if (!confirm("🚨 ARE YOU SURE? This will permanently deactivate your account and revoke all sessions. This action cannot be undone.")) {
+            return;
+        }
+        
+        try {
+            const response = await this.apiFetch('/user/delete-account', { method: 'POST' });
+            const result = await response.json();
+            
+            if (response.ok) {
+                alert("Account deleted successfully. You have been logged out.");
+                await firebase.auth().signOut();
+                window.location.href = '/';
+            } else {
+                throw new Error(result.error || "Deletion failed");
+            }
+        } catch (err) {
+            alert("Error: " + err.message);
+        }
+    },
+
+
     checkPaymentReturn: async function() {
         const urlParams = new URLSearchParams(window.location.search);
         const orderId = urlParams.get('order_id');
@@ -108,9 +131,6 @@ const Writely = {
                     alert(`✅ Payment Successful! ₹${res.amount || ''} added to your wallet.`);
                     // Redirect to wallet to clear params and refresh balance
                     window.location.href = window.location.pathname;
-                } else {
-                    console.warn("❌ Payment verification failed/pending:", res.status);
-                    // If it's a known failure status, clear the flag to allow retry or showing error
                 }
             } catch (err) {
                 console.error("❌ Verification error:", err);
@@ -178,6 +198,34 @@ const Writely = {
                 <td>${e.time || 'Live'}</td>
             </tr>
         `).join('');
+    },
+
+    /**
+     * Client-side password strength validation (Rule 22).
+     * Enforces: 8+ chars, 1 uppercase, 2 lowercase, 1 special character.
+     */
+    validatePassword: function(password) {
+        const errors = [];
+        if (!password) {
+            return { ok: false, errors: ['Password is required'] };
+        }
+        if (password.length < 8) {
+            errors.push('At least 8 characters');
+        }
+        if (!/[A-Z]/.test(password)) {
+            errors.push('At least 1 uppercase letter');
+        }
+        if ((password.match(/[a-z]/g) || []).length < 2) {
+            errors.push('At least 2 lowercase letters');
+        }
+        if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+            errors.push('At least 1 special character');
+        }
+        
+        return {
+            ok: errors.length === 0,
+            errors: errors
+        };
     }
 };
 
@@ -318,43 +366,35 @@ window.registerUser = async function(event) {
 
     try {
         if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = "Creating account..."; }
-        const userCredential = await firebase.auth().createUserWithEmailAndPassword(email, password);
-        const user = userCredential.user;
         
-        await firebase.firestore().collection('users').doc(user.uid).set({
-            uid: user.uid,
-            email: user.email,
-            displayName: fullName,
-            fullName: fullName,
-            collegeName: collegeName,
-            phoneNumber: phoneNumber,
-            // Location — used for nearby-job matching (Rapido-style)
-            city: city,                                      // e.g. "Delhi" (display)
-            cityNormalized: city ? city.toLowerCase() : '',  // for case-insensitive match queries
-            pincode: pincode || null,                        // e.g. "110001"
-            role: role,
-            emailVerified: false,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            metrics: { totalSpent: 0, activeOrders: 0 }
+        // --- FIX #22: Server-side Registration ---
+        // Instead of direct Firestore write from the client, we call the API.
+        const response = await Writely.apiFetch('/auth/register', {
+            method: 'POST',
+            body: JSON.stringify({
+                email,
+                password,
+                fullName,
+                collegeName,
+                phoneNumber,
+                city,
+                pincode,
+                role
+            })
         });
 
-        // Send Firebase verification + welcome email to the registered address
-        try {
-            await user.sendEmailVerification({
-                url: `${window.location.origin}/apps/seeker-web/index.html`,
-                handleCodeInApp: false
-            });
-            console.log("✅ Verification email sent to", user.email);
-        } catch (mailErr) {
-            console.warn("Email send failed (non-fatal):", mailErr.message);
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error || 'Registration failed');
         }
 
-        alert(`Account created! 📧 We've sent a verification email to ${user.email}. Please check your inbox (and spam folder).`);
-        if (role === 'WRITER') {
-            window.location.href = window.location.pathname.includes('seeker-web') ? '../writer-mobile/writer.html' : 'writer.html';
-        } else {
-            window.location.href = 'dashboard.html';
-        }
+        // Server-side registration is now the source of truth.
+        // We avoid a browser Firebase Auth sign-in here so signup does not fail
+        // when the client cannot reach Firebase Auth (network, CSP, or App Check).
+        const redirectUrl = `login.html?registered=1&email=${encodeURIComponent(email)}`;
+        const successMessage = result.message || 'Account created successfully.';
+        alert(`${successMessage}\n\nPlease log in to continue.`);
+        window.location.href = redirectUrl;
     } catch (error) {
         alert("Registration Failed: " + error.message);
         if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = "Create Account"; }
@@ -1438,41 +1478,11 @@ window.Writely = Writely;
         document.head.appendChild(apple);
     }
 
-    // Inject a "Pricing" link into the sidebar nav of every dashboard page.
-    // Auto-resolves the correct relative path from any /apps/<role>/ folder.
-    function injectPricingLink() {
-        const menu = document.querySelector('aside.sidebar nav.sidebar-menu, .sidebar-menu');
-        if (!menu || menu.querySelector('a[data-wr-pricing]')) return; // already injected
-
-        // Compute relative URL — pricing.html lives under /apps/seeker-web/
-        const path = window.location.pathname.toLowerCase();
-        let href = 'pricing.html';
-        if (path.includes('/apps/writer-mobile/'))     href = '../seeker-web/pricing.html';
-        else if (path.includes('/apps/admin-web/'))    href = '../seeker-web/pricing.html';
-        else if (path.includes('/apps/tenant-admin-web/')) href = '../seeker-web/pricing.html';
-
-        const link = document.createElement('a');
-        link.href = href;
-        link.className = 'menu-item';
-        link.setAttribute('data-wr-pricing', '1');
-        link.innerHTML = `
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="12" y1="1" x2="12" y2="23"></line>
-                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-            </svg>
-            Pricing
-        `;
-        // Highlight when on the pricing page itself
-        if (path.endsWith('/pricing.html')) link.classList.add('active');
-        menu.appendChild(link);
-    }
-
     function setup() {
         setFavicon();
         replaceLogoMarks();
         setupTopNav();
         setupDashboardSidebar();
-        injectPricingLink();
         injectPwaTags();
         registerServiceWorker();
     }
